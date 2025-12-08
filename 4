@@ -1,3 +1,4 @@
+import requests
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,29 +7,146 @@ import matplotlib.pyplot as plt
 pd.set_option("display.max_rows", 50)
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 120)
-pd.set_option("display.float_format", lambda x: f"{x:.2f}")  # числа без экспоненциальной записи
+pd.set_option("display.float_format", lambda x: f"{x:.2f}")
 np.set_printoptions(suppress=True)
 
-# загружаем подготовленный датасет
-df = pd.read_csv("cs2_items_clean.csv")
+# =====================================
+# 1–2. Сбор данных и формирование таблицы
+# =====================================
 
-# дополнительные метрики
+# ---- данные с market.csgo.com ----
+MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json"
+
+resp_market = requests.get(MARKET_URL)
+resp_market.raise_for_status()
+market_json = resp_market.json()
+market_items = market_json["items"]
+
+market_rows = []
+
+def to_float(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+def to_int(x):
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return None
+
+for _, item in market_items.items():
+    name = item.get("market_hash_name")
+    if not name:
+        continue
+
+    market_rows.append(
+        {
+            "market_hash_name": name,
+            "market_price_rub": to_float(item.get("price")),
+            "market_avg_price_rub": to_float(item.get("avg_price")),
+            "market_buy_order_rub": to_float(item.get("buy_order")),
+            "market_popularity_7d": to_int(item.get("popularity_7d")),
+            "market_ru_rarity": item.get("ru_rarity"),
+            "market_ru_quality": item.get("ru_quality"),
+        }
+    )
+
+df_market = pd.DataFrame(market_rows)
+print("Строк после market.csgo.com:", len(df_market))
+
+# ---- данные по скинам из CSGO-API (ByMykel) ----
+SKINS_URL = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json"
+
+resp_skins = requests.get(SKINS_URL)
+resp_skins.raise_for_status()
+skins_json = resp_skins.json()
+
+skins_rows = []
+
+for skin in skins_json:
+    name = skin.get("market_hash_name")
+    if not name:
+        continue
+
+    weapon = skin.get("weapon") or {}
+    pattern = skin.get("pattern") or {}
+
+    skins_rows.append(
+        {
+            "market_hash_name": name,
+            "weapon_name": weapon.get("name"),
+            "float_min": skin.get("min_float"),
+            "float_max": skin.get("max_float"),
+            "pattern_name": pattern.get("name"),
+            "is_stattrak": bool(skin.get("stattrak")),
+            "is_souvenir": bool(skin.get("souvenir")),
+        }
+    )
+
+df_skins = pd.DataFrame(skins_rows)
+print("Строк после CSGO-API:", len(df_skins))
+
+# ---- объединяем и чистим ----
+df_full = df_market.merge(df_skins, on="market_hash_name", how="inner")
+print("Строк после merge (до чистки):", len(df_full))
+
+df_full = df_full.replace("", pd.NA)
+df_clean = df_full.dropna(how="any")
+print("Строк после dropna(how='any'):", len(df_clean))
+
+# порядок колонок — сначала описание предмета, потом характеристики, потом цены
+cols_order = [
+    "market_hash_name",
+    "weapon_name",
+    "pattern_name",
+    "is_stattrak",
+    "is_souvenir",
+    "market_ru_rarity",
+    "market_ru_quality",
+    "float_min",
+    "float_max",
+    "market_price_rub",
+    "market_avg_price_rub",
+    "market_buy_order_rub",
+    "market_popularity_7d",
+]
+
+df_clean = df_clean[cols_order]
+print("Финальные колонки:", df_clean.columns.tolist())
+
+# сохраняем полный датасет
+df_clean.to_csv("cs2_items_clean.csv", index=False, encoding="utf-8-sig")
+print("Файл cs2_items_clean.csv сохранён.")
+
+# при желании дополнительно можно сделать сэмпл на 5000 строк
+if len(df_clean) >= 5000:
+    df_sample = df_clean.sample(n=5000, random_state=42)
+    df_sample.to_csv("cs2_items_clean_5000.csv", index=False, encoding="utf-8-sig")
+    print("Файл cs2_items_clean_5000.csv сохранён.")
+
+# дальше работаем с df_clean
+df = df_clean.copy()
+
+# =====================================
+# 3. Базовый анализ в pandas
+# =====================================
+
+# дополнительные метрики (без анализа флоатов)
 df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"]
-
 denom = df["market_avg_price_rub"].replace(0, np.nan)
 df["price_to_avg_ratio"] = df["market_price_rub"] / denom
-
 df["log_price"] = np.log1p(df["market_price_rub"])
 
-print("=== Общая информация ===")
+print("\n=== Общая информация ===")
 print("Размер датасета (строки, колонки):", df.shape)
 
-# общее количество пропусков (подробную таблицу по столбцам не выводим)
-total_missing = df.isna().sum().sum()
-print("Общее количество пропусков в датасете:", int(total_missing))
+total_missing = int(df.isna().sum().sum())
+print("Общее количество пропусков:", total_missing)
 
 dup_count = df.duplicated().sum()
-print("\nКоличество полных дубликатов:", dup_count)
+print("Полных дубликатов:", dup_count)
 if dup_count > 0:
     df = df.drop_duplicates()
     print("Размер после удаления дублей:", df.shape)
@@ -54,7 +172,6 @@ print(df["market_popularity_7d"].describe())
 print("\nОписательная статистика по price_to_avg_ratio:")
 print(df["price_to_avg_ratio"].describe())
 
-# группировки
 mean_price_by_rarity = (
     df.groupby("market_ru_rarity")["market_price_rub"]
     .mean()
@@ -79,7 +196,6 @@ mean_price_by_quality = (
 print("\nСредняя цена по качеству:")
 print(mean_price_by_quality)
 
-# корреляции
 corr_cols = [
     "market_price_rub",
     "market_avg_price_rub",
@@ -93,7 +209,7 @@ corr = df[corr_cols].corr()
 print("\nКорреляция числовых признаков:")
 print(corr)
 
-# простая "модель" ожидаемой цены по группам
+# простая «ожидаемая цена» по группе признаков
 group_cols = ["market_ru_rarity", "market_ru_quality", "is_stattrak", "is_souvenir"]
 df_model = df.copy()
 
@@ -139,9 +255,9 @@ print(
     ].head(10)
 )
 
-# ==========================
-# ВИЗУАЛИЗАЦИИ
-# ==========================
+# =====================================
+# 4. Графики в matplotlib
+# =====================================
 
 # 1. распределение цен
 plt.figure()
