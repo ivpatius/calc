@@ -27,14 +27,13 @@ def to_int(x):
     except (TypeError, ValueError):
         return None
 
-for class_instance, item in market_items.items():
+for _, item in market_items.items():
     name = item.get("market_hash_name")
     if not name:
         continue
 
-    # Берём то, что реально есть в объекте
+    # СРАЗУ берем только нужные поля (без class_instance)
     market_rows.append({
-        "class_instance": class_instance,
         "market_hash_name": name,
         "market_price_rub": to_float(item.get("price")),
         "market_avg_price_rub": to_float(item.get("avg_price")),
@@ -66,52 +65,25 @@ for skin in skins_json:
         continue
 
     rarity = skin.get("rarity") or {}
-    wear = skin.get("wear") or {}
     weapon = skin.get("weapon") or {}
-    collection = skin.get("collection") or {}
     pattern = skin.get("pattern") or {}
     image = skin.get("image") or {}
 
+    # СРАЗУ не берём:
+    # skin_id, item_name, item_type, weapon_slug,
+    # rarity_slug, rarity_color, wear_name, wear_slug,
+    # collection_name, collection_slug, pattern_slug
+
     skins_rows.append({
-        # ключ для джойна
         "market_hash_name": name,
-
-        # базовая инфа о скине
-        "skin_id": skin.get("id"),
-        "item_name": skin.get("name"),
-        "item_type": skin.get("type"),
         "item_description": skin.get("description"),
-
-        # оружие
         "weapon_name": weapon.get("name"),
-        "weapon_slug": weapon.get("slug"),
-
-        # редкость
         "rarity_name": rarity.get("name"),
-        "rarity_slug": rarity.get("slug"),
-        "rarity_color": rarity.get("color"),
-
-        # износ
-        "wear_name": wear.get("name"),
-        "wear_slug": wear.get("slug"),
-
-        # флоаты
         "float_min": skin.get("min_float"),
         "float_max": skin.get("max_float"),
-
-        # коллекция
-        "collection_name": collection.get("name"),
-        "collection_slug": collection.get("slug"),
-
-        # паттерн
         "pattern_name": pattern.get("name"),
-        "pattern_slug": pattern.get("slug"),
-
-        # флаги
         "is_stattrak": bool(skin.get("stattrak")),
         "is_souvenir": bool(skin.get("souvenir")),
-
-        # картинка
         "image_url": image.get("url"),
     })
 
@@ -120,29 +92,40 @@ print("Строк после CSGO-API:", len(df_skins))
 
 
 # =========================
-# 3. Объединяем в одну таблицу
+# 3. Объединяем только нужные колонки
 # =========================
 
 df_full = df_market.merge(df_skins, on="market_hash_name", how="inner")
-print("Строк после merge:", len(df_full))
-
-# можно выкинуть строки без цены (если не нужны)
-df_full = df_full.dropna(subset=["market_price_rub"])
-print("Строк после удаления пустых цен:", len(df_full))
+print("Строк после merge (до чистки):", len(df_full))
 
 # =========================
-# 4. Сохраняем ВСЮ выборку
+# 4. Убираем ВСЕ строки с любыми пустыми значениями
 # =========================
 
-df_full.to_csv("cs2_items_full.csv", index=False, encoding="utf-8-sig")
-print("Файл cs2_items_full.csv сохранён.")
+# Пустые строки -> NA
+df_full = df_full.replace("", pd.NA)
+
+# Дропаем строку, если хотя бы одно значение пустое
+df_clean = df_full.dropna(how="any")
+print("Строк после dropna(how='any'):", len(df_clean))
+print("Финальные колонки:", df_clean.columns.tolist())
 
 
 # =========================
-# 5. (опционально) если всё-таки нужен датасет на 5000 предметов
+# 5. Сохраняем полный чистый датасет
 # =========================
 
-if len(df_full) >= 5000:
-    df_5000 = df_full.sample(n=5000, random_state=42)
-    df_5000.to_csv("cs2_items_5000.csv", index=False, encoding="utf-8-sig")
-    print("Файл cs2_items_5000.csv сохранён (рандомные 5000 строк).")
+df_clean.to_csv("cs2_items_clean.csv", index=False, encoding="utf-8-sig")
+print("Файл cs2_items_clean.csv сохранён.")
+
+# =========================
+# 6. (опционально) 5000 рандомных предметов
+# =========================
+
+N = 5000
+if len(df_clean) >= N:
+    df_sample = df_clean.sample(n=N, random_state=42)
+    df_sample.to_csv("cs2_items_clean_5000.csv", index=False, encoding="utf-8-sig")
+    print("Файл cs2_items_clean_5000.csv сохранён (рандомные 5000 строк).")
+else:
+    print(f"Всего {len(df_clean)} строк, меньше чем {N} — отдельный сэмпл не создаётся.")
