@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 pd.set_option("display.max_rows", 50)
 pd.set_option("display.max_columns", 50)
 pd.set_option("display.width", 120)
-pd.set_option("display.float_format", lambda x: f"{x:.2f}")  # без экспоненциальной записи
+pd.set_option("display.float_format", lambda x: f"{x:.2f}")  # числа без экспоненциальной записи
 np.set_printoptions(suppress=True)
 
 # загружаем подготовленный датасет
@@ -14,14 +14,18 @@ df = pd.read_csv("cs2_items_clean.csv")
 
 # дополнительные метрики
 df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"]
+
 denom = df["market_avg_price_rub"].replace(0, np.nan)
 df["price_to_avg_ratio"] = df["market_price_rub"] / denom
+
 df["log_price"] = np.log1p(df["market_price_rub"])
 
 print("=== Общая информация ===")
 print("Размер датасета (строки, колонки):", df.shape)
-print("\nПропуски по столбцам:")
-print(df.isna().sum())
+
+# общее количество пропусков (подробную таблицу по столбцам не выводим)
+total_missing = df.isna().sum().sum()
+print("Общее количество пропусков в датасете:", int(total_missing))
 
 dup_count = df.duplicated().sum()
 print("\nКоличество полных дубликатов:", dup_count)
@@ -159,12 +163,12 @@ plt.yscale("log")
 plt.tight_layout()
 plt.show()
 
-# 3. распределение спреда цена - buy order
+# 3. распределение отношения текущей цены к средней
 plt.figure()
-df["spread_price_buy"].hist(bins=50)
-plt.xlabel("Цена - buy order, руб.")
+df["price_to_avg_ratio"].hist(bins=50)
+plt.xlabel("Текущая цена / средняя цена")
 plt.ylabel("Количество предметов")
-plt.title("Распределение спреда между ценой и лучшим buy order")
+plt.title("Распределение отношения текущей цены к средней")
 plt.tight_layout()
 plt.show()
 
