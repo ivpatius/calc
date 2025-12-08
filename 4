@@ -1,6 +1,7 @@
 # =====================================
-# ПУНКТ 3 + 4
+# ПУНКТЫ 3 + 4
 # Базовый анализ (pandas) + визуализация (matplotlib)
+# БЕЗ флоатов и без wear_tier
 # =====================================
 
 import pandas as pd
@@ -18,134 +19,103 @@ pd.set_option("display.width", 120)
 df = pd.read_csv("cs2_items_clean.csv")
 
 # -------------------------------------
-# Пользовательские метрики
+# Пользовательские метрики (без флоатов)
 # -------------------------------------
-
-# Диапазон флоатов
-df["float_range"] = df["float_max"] - df["float_min"]
 
 # Спред между текущей ценой и лучшей заявкой на покупку
 df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"]
 
-# Отношение текущей цены к средней
-df["price_to_avg_ratio"] = df["market_price_rub"] / df["market_avg_price_rub"]
+# Отношение текущей цены к средней (осторожно с делением на ноль)
+denom = df["market_avg_price_rub"].replace(0, np.nan)
+df["price_to_avg_ratio"] = df["market_price_rub"] / denom
 
 # Логарифм цены (для более адекватного распределения)
 df["log_price"] = np.log1p(df["market_price_rub"])
 
-# Изношенность (wear_tier), извлекаем из названия
-wear_levels = [
-    "Factory New",
-    "Minimal Wear",
-    "Field-Tested",
-    "Well-Worn",
-    "Battle-Scarred"
-]
-
-def extract_wear(name: str):
-    if not isinstance(name, str):
-        return None
-    for w in wear_levels:
-        if w in name:
-            return w
-    return None
-
-df["wear_tier"] = df["market_hash_name"].apply(extract_wear)
-df_wear = df.dropna(subset=["wear_tier"]).copy()
 
 # =====================================
 # ПАНДАС-АНАЛИЗ (ПУНКТ 3)
 # =====================================
 
 print("\n=== 1. Размер датасета (строки, колонки) ===")
-print(df.shape)  # 1-я характеристика
+print(df.shape)  # 1
 
 print("\n=== 2. Количество пропусков по столбцам ===")
 missing = df.isna().sum()
-print(missing)   # 2-я характеристика
+print(missing)   # 2
 
 print("\n=== 3. Количество полных дубликатов ===")
 dup_count = df.duplicated().sum()
-print("Полных дублей:", dup_count)  # 3-я характеристика
+print("Полных дублей:", dup_count)  # 3
 
 if dup_count > 0:
     df = df.drop_duplicates()
     print("После удаления дублей размер:", df.shape)
 
 print("\n=== 4. Число уникальных предметов (market_hash_name) ===")
-print(df["market_hash_name"].nunique())  # 4-я характеристика
+print(df["market_hash_name"].nunique())  # 4
 
 print("\n=== 5. Число уникальных видов оружия (weapon_name) ===")
-print(df["weapon_name"].nunique())       # 5-я характеристика
+print(df["weapon_name"].nunique())       # 5
 
 print("\n=== 6. Распределение по редкости (market_ru_rarity) ===")
-print(df["market_ru_rarity"].value_counts())  # 6-я характеристика
+print(df["market_ru_rarity"].value_counts())  # 6
 
 print("\n=== 7. Распределение по качеству (market_ru_quality) ===")
-print(df["market_ru_quality"].value_counts()) # 7-я характеристика
+print(df["market_ru_quality"].value_counts()) # 7
 
 print("\n=== 8. Доля предметов с StatTrak (is_stattrak) ===")
-print(df["is_stattrak"].mean())              # 8-я характеристика
+print(df["is_stattrak"].mean())              # 8
 
 print("\n=== 9. Доля предметов с Souvenir (is_souvenir) ===")
-print(df["is_souvenir"].mean())              # 9-я характеристика
+print(df["is_souvenir"].mean())              # 9
 
 print("\n=== 10. Описательная статистика по цене (market_price_rub) ===")
-print(df["market_price_rub"].describe())     # 10-я характеристика
+print(df["market_price_rub"].describe())     # 10
 
 print("\n=== 11. Описательная статистика по популярности (market_popularity_7d) ===")
-print(df["market_popularity_7d"].describe()) # 11-я характеристика
+print(df["market_popularity_7d"].describe()) # 11
 
-print("\n=== 12. Описательная статистика по диапазону флоатов (float_range) ===")
-print(df["float_range"].describe())          # 12-я характеристика
+print("\n=== 12. Описательная статистика по спреду (spread_price_buy) ===")
+print(df["spread_price_buy"].describe())     # 12
 
-print("\n=== 13. Средняя цена по редкости (market_ru_rarity) ===")
+print("\n=== 13. Описательная статистика по price_to_avg_ratio ===")
+print(df["price_to_avg_ratio"].describe())   # 13
+
+print("\n=== 14. Средняя цена по редкости (market_ru_rarity) ===")
 mean_price_by_rarity = df.groupby("market_ru_rarity")["market_price_rub"].mean().sort_values(ascending=False)
-print(mean_price_by_rarity)                  # 13-я характеристика
+print(mean_price_by_rarity)                  # 14
 
-print("\n=== 14. Средняя цена по изношенности (wear_tier) ===")
-mean_price_by_wear = df_wear.groupby("wear_tier")["market_price_rub"].mean().sort_values(ascending=False)
-print(mean_price_by_wear)                    # 14-я характеристика
+print("\n=== 15. Средняя популярность по редкости (market_ru_rarity) ===")
+mean_pop_by_rarity = df.groupby("market_ru_rarity")["market_popularity_7d"].mean().sort_values(ascending=False)
+print(mean_pop_by_rarity)                    # 15
 
-print("\n=== 15. Корреляция между ценой, популярностью и флоатами ===")
+print("\n=== 16. Средняя цена по качеству (market_ru_quality) ===")
+mean_price_by_quality = df.groupby("market_ru_quality")["market_price_rub"].mean().sort_values(ascending=False)
+print(mean_price_by_quality)                 # 16 (запас)
+
+print("\n=== 17. Корреляция между ценой, популярностью и «рыночными» метриками ===")
 corr_cols = [
     "market_price_rub",
     "market_avg_price_rub",
     "market_buy_order_rub",
     "market_popularity_7d",
-    "float_min",
-    "float_max",
-    "float_range",
+    "spread_price_buy",
+    "price_to_avg_ratio",
+    "log_price",
 ]
 corr = df[corr_cols].corr()
-print(corr)                                  # 15-я характеристика
-
-# Доп. анализ цены через группы
-print("\n=== Средняя цена по качеству (market_ru_quality) ===")
-mean_price_by_quality = df.groupby("market_ru_quality")["market_price_rub"].mean().sort_values(ascending=False)
-print(mean_price_by_quality)
-
-print("\n=== Средняя цена по комбинации [редкость + изношенность] (топ-20) ===")
-mean_price_by_rarity_wear = df_wear.groupby(
-    ["market_ru_rarity", "wear_tier"]
-)["market_price_rub"].mean().sort_values(ascending=False)
-print(mean_price_by_rarity_wear.head(20))
-
-print("\n=== Средняя цена по комбинации [редкость + качество] (топ-20) ===")
-mean_price_by_rarity_quality = df.groupby(
-    ["market_ru_rarity", "market_ru_quality"]
-)["market_price_rub"].mean().sort_values(ascending=False)
-print(mean_price_by_rarity_quality.head(20))
+print(corr)                                  # 17
 
 
 # =====================================
 # ПРОСТАЯ "ОЖИДАЕМАЯ ЦЕНА" ПО ГРУППАМ
-# (редкость + качество + изношенность)
+# (редкость + качество + StatTrak + Souvenir)
 # =====================================
 
-group_cols = ["market_ru_rarity", "market_ru_quality", "wear_tier"]
+group_cols = ["market_ru_rarity", "market_ru_quality", "is_stattrak", "is_souvenir"]
 
-df_model = df_wear.copy()
+df_model = df.copy()
 
 group_mean_price = df_model.groupby(group_cols)["market_price_rub"].mean().reset_index()
 group_mean_price = group_mean_price.rename(columns={"market_price_rub": "expected_price_group"})
@@ -156,7 +126,8 @@ df_model["price_deviation"] = df_model["market_price_rub"] - df_model["expected_
 print("\n=== Примеры предметов с самой завышенной ценой относительно группы ===")
 print(
     df_model.sort_values("price_deviation", ascending=False)[
-        ["market_hash_name", "market_ru_rarity", "market_ru_quality", "wear_tier",
+        ["market_hash_name", "market_ru_rarity", "market_ru_quality",
+         "is_stattrak", "is_souvenir",
          "market_price_rub", "expected_price_group", "price_deviation"]
     ].head(10)
 )
@@ -164,7 +135,8 @@ print(
 print("\n=== Примеры предметов с самой заниженной ценой относительно группы ===")
 print(
     df_model.sort_values("price_deviation", ascending=True)[
-        ["market_hash_name", "market_ru_rarity", "market_ru_quality", "wear_tier",
+        ["market_hash_name", "market_ru_rarity", "market_ru_quality",
+         "is_stattrak", "is_souvenir",
          "market_price_rub", "expected_price_group", "price_deviation"]
     ].head(10)
 )
@@ -172,7 +144,7 @@ print(
 
 # =====================================
 # ВИЗУАЛИЗАЦИИ (ПУНКТ 4)
-# ≥10 графиков в matplotlib
+# ≥10 графиков, без флоатов и wear_tier
 # =====================================
 
 # 1. Гистограмма цен
@@ -181,31 +153,31 @@ df["market_price_rub"].hist(bins=50)
 plt.xlabel("Цена, руб.")
 plt.ylabel("Количество предметов")
 plt.title("Распределение цен предметов CS2")
-plt.yscale("log")  # лог-масштаб по Y, чтобы хвост был виден
+plt.yscale("log")
 plt.tight_layout()
 plt.show()
-# Вывод: много дешёвых скинов, длинный хвост дорогих.
+# Краткий вывод под график: много дешёвых предметов и длинный хвост дорогих.
 
 # 2. Гистограмма популярности
 plt.figure()
 df["market_popularity_7d"].hist(bins=50)
-plt.xlabel("Популярность за 7 дней (кол-во сделок/оценка)")
+plt.xlabel("Популярность за 7 дней")
 plt.ylabel("Количество предметов")
 plt.title("Распределение популярности предметов")
 plt.yscale("log")
 plt.tight_layout()
 plt.show()
-# Вывод: большинство предметов имеют низкую популярность, небольшое количество сильно торгуется.
+# Вывод: большинство предметов мало торгуются, есть небольшой пул очень популярных.
 
-# 3. Гистограмма диапазона флоатов
+# 3. Гистограмма спреда цена - buy order (замена графика по диапазону флоатов)
 plt.figure()
-df["float_range"].hist(bins=50)
-plt.xlabel("Диапазон флоатов (max - min)")
+df["spread_price_buy"].hist(bins=50)
+plt.xlabel("Спред: цена - buy order, руб.")
 plt.ylabel("Количество предметов")
-plt.title("Распределение диапазона флоатов")
+plt.title("Распределение спреда между ценой и лучшим buy order")
 plt.tight_layout()
 plt.show()
-# Вывод: у большей части скинов диапазон флоата в умеренных значениях, есть узкие и широкие диапазоны.
+# Вывод: у большинства предметов спред небольшой, но есть заметные расхождения.
 
 # 4. Boxplot цены по редкости
 plt.figure()
@@ -215,7 +187,7 @@ plt.title("Распределение цен по редкости")
 plt.suptitle("")
 plt.tight_layout()
 plt.show()
-# Вывод: чем более редкий скин, тем выше медиана и разброс цен.
+# Вывод: более редкие скины имеют более высокую медиану и разброс цен.
 
 # 5. Средняя цена по редкости (barplot)
 plt.figure()
@@ -235,7 +207,7 @@ plt.title("Количество предметов по редкости")
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
-# Вывод: массовые редкости сильно доминируют по количеству.
+# Вывод: массовые редкости доминируют по количеству.
 
 # 7. Scatter: цена vs популярность
 plt.figure()
@@ -247,18 +219,19 @@ plt.xscale("log")
 plt.yscale("log")
 plt.tight_layout()
 plt.show()
-# Вывод: есть кластер дешёвых, но очень популярных скинов; дорогие обычно торгуются реже.
+# Вывод: виден кластер дешёвых, но очень популярных предметов; дорогие, как правило, менее ликвидные.
 
-# 8. Scatter: минимальный флоат vs цена
+# 8. Scatter: средняя цена vs текущая цена
 plt.figure()
-plt.scatter(df["float_min"], df["market_price_rub"])
-plt.xlabel("Минимальный флоат")
-plt.ylabel("Цена, руб.")
-plt.title("Зависимость цены от минимального флоата")
+plt.scatter(df["market_avg_price_rub"], df["market_price_rub"])
+plt.xlabel("Средняя цена, руб.")
+plt.ylabel("Текущая цена, руб.")
+plt.title("Связь текущей и средней цены")
+plt.xscale("log")
 plt.yscale("log")
 plt.tight_layout()
 plt.show()
-# Вывод: у скинов с очень низким минимальным флоатом цена чаще выше.
+# Вывод: большинство предметов торгуются близко к своей средней цене, но есть сильные отклонения.
 
 # 9. Доля StatTrak по оружию (топ-10)
 st_share_by_weapon = df.groupby("weapon_name")["is_stattrak"].mean().sort_values(ascending=False).head(10)
@@ -270,7 +243,7 @@ plt.title("Доля StatTrak по оружию (топ-10)")
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
-# Вывод: для некоторых типов оружия игроки чаще выбирают версию StatTrak.
+# Вывод: по некоторым видам оружия StatTrak заметно популярнее.
 
 # 10. Топ-20 самых популярных предметов
 top_popular = df.sort_values("market_popularity_7d", ascending=False).head(20)
@@ -282,16 +255,16 @@ plt.title("Топ-20 самых популярных предметов")
 plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.show()
-# Вывод: видно, какие именно скины формируют основной объём сделок.
+# Вывод: видно конкретные скины, которые формируют основной объём рынка.
 
-# 11. (дополнительно) Тепловая карта корреляций
+# 11. Тепловая карта корреляций (без флоатов)
 plt.figure()
 plt.imshow(corr, interpolation="nearest")
 plt.xticks(range(len(corr)), corr.columns, rotation=90)
 plt.yticks(range(len(corr)), corr.columns)
 plt.colorbar()
-plt.title("Корреляции числовых признаков")
+plt.title("Корреляции ценовых и рыночных показателей")
 plt.tight_layout()
 plt.show()
 # Вывод: текущая цена, средняя цена и buy order сильно коррелируют,
-# популярность слабее связана с ценой.
+# популярность и спред дают дополнительную информацию.
