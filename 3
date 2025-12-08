@@ -1,0 +1,326 @@
+# =====================================
+# Импорты
+# =====================================
+
+import requests
+import pandas as pd
+import numpy as np
+
+# Чтобы лучше видеть весь вывод
+pd.set_option("display.max_rows", 50)
+pd.set_option("display.max_columns", 50)
+pd.set_option("display.width", 120)
+
+
+# =====================================
+# ЧАСТЬ 1–2. СБОР ДАННЫХ И ФОРМИРОВАНИЕ ТАБЛИЦЫ
+# Источники: market.csgo.com (API) + CSGO-API (ByMykel)
+# =====================================
+
+# -------------------------
+# 1.1. Загрузка данных с market.csgo.com
+# -------------------------
+
+MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json"
+
+resp_market = requests.get(MARKET_URL)
+resp_market.raise_for_status()
+market_json = resp_market.json()
+
+market_items = market_json["items"]
+
+market_rows = []
+
+def to_float(x):
+    """Безопасное приведение к float."""
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+def to_int(x):
+    """Безопасное приведение к int."""
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return None
+
+for _, item in market_items.items():
+    name = item.get("market_hash_name")
+    if not name:
+        continue
+
+    # Берём только нужные поля (сразу без class_instance и прочего мусора)
+    market_rows.append({
+        "market_hash_name": name,                            # полное название предмета
+        "market_price_rub": to_float(item.get("price")),     # текущая цена
+        "market_avg_price_rub": to_float(item.get("avg_price")),  # средняя цена
+        "market_buy_order_rub": to_float(item.get("buy_order")),  # лучшая заявка на покупку
+        "market_popularity_7d": to_int(item.get("popularity_7d")),# популярность за 7 дней
+        "market_ru_rarity": item.get("ru_rarity"),           # редкость (по-русски)
+        "market_ru_quality": item.get("ru_quality"),         # качество (по-русски)
+    })
+
+df_market = pd.DataFrame(market_rows)
+print("Строк после market.csgo.com:", len(df_market))
+print(df_market.head(3))
+
+
+# -------------------------
+# 1.2. Загрузка данных по скинам из CSGO-API (ByMykel)
+# -------------------------
+
+SKINS_URL = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json"
+
+resp_skins = requests.get(SKINS_URL)
+resp_skins.raise_for_status()
+skins_json = resp_skins.json()
+
+skins_rows = []
+
+for skin in skins_json:
+    name = skin.get("market_hash_name")
+    if not name:
+        continue
+
+    weapon = skin.get("weapon") or {}
+    pattern = skin.get("pattern") or {}
+
+    # Сразу берём только те колонки, которые нам нужны
+    skins_rows.append({
+        "market_hash_name": name,
+        "weapon_name": weapon.get("name"),           # оружие
+        "float_min": skin.get("min_float"),          # минимально возможный флоат
+        "float_max": skin.get("max_float"),          # максимально возможный флоат
+        "pattern_name": pattern.get("name"),         # название паттерна (если есть)
+        "is_stattrak": bool(skin.get("stattrak")),   # флаг StatTrak
+        "is_souvenir": bool(skin.get("souvenir")),   # флаг Souvenir
+    })
+
+df_skins = pd.DataFrame(skins_rows)
+print("Строк после CSGO-API:", len(df_skins))
+print(df_skins.head(3))
+
+
+# -------------------------
+# 1.3. Объединяем данные и чистим пропуски
+# -------------------------
+
+df_full = df_market.merge(df_skins, on="market_hash_name", how="inner")
+print("Строк после merge (до чистки):", len(df_full))
+
+# Заменяем пустые строки на NA (если вдруг есть)
+df_full = df_full.replace("", pd.NA)
+
+# Убираем строки, где есть хотя бы один пропуск
+df_clean = df_full.dropna(how="any")
+print("Строк после dropna(how='any'):", len(df_clean))
+
+# -------------------------
+# 1.4. Ставим колонки в смысловом порядке
+# -------------------------
+
+cols_order = [
+    # Описание предмета
+    "market_hash_name",      # полное название
+    "weapon_name",           # оружие
+    "pattern_name",          # паттерн
+    "is_stattrak",           # StatTrak
+    "is_souvenir",           # Souvenir
+
+    # Характеристики скина
+    "market_ru_rarity",      # редкость
+    "market_ru_quality",     # качество
+    "float_min",             # мин. флоат
+    "float_max",             # макс. флоат
+
+    # Рыночные показатели
+    "market_price_rub",      # текущая цена
+    "market_avg_price_rub",  # средняя цена
+    "market_buy_order_rub",  # лучшая заявка на покупку
+    "market_popularity_7d",  # популярность за 7 дней
+]
+
+df_clean = df_clean[cols_order]
+
+print("Финальные колонки:", df_clean.columns.tolist())
+print(df_clean.head(5))
+
+
+# -------------------------
+# 1.5. Сохраняем датасет для дальнейшей работы
+# -------------------------
+
+df_clean.to_csv("cs2_items_clean.csv", index=False, encoding="utf-8-sig")
+print("Файл cs2_items_clean.csv сохранён.")
+
+# Дополнительно (по желанию): сэмпл на 5000 случайных предметов
+N = 5000
+if len(df_clean) >= N:
+    df_sample = df_clean.sample(n=N, random_state=42)
+    df_sample.to_csv("cs2_items_clean_5000.csv", index=False, encoding="utf-8-sig")
+    print("Файл cs2_items_clean_5000.csv сохранён.")
+else:
+    print(f"Всего {len(df_clean)} строк, меньше чем {N} — отдельный сэмпл не создаётся.")
+
+
+
+# =====================================
+# ЧАСТЬ 3. БАЗОВЫЙ АНАЛИЗ С ПОМОЩЬЮ PANDAS
+# Обработка дублей, пропусков, аномальных значений,
+# + ≥15 характеристик и пользовательские метрики
+# =====================================
+
+# Можно либо переиспользовать df_clean, либо загрузить заново из CSV:
+df = pd.read_csv("cs2_items_clean.csv")
+
+print("\n=== ОБЩАЯ ИНФОРМАЦИЯ О ДАННЫХ ===")
+print("Размер датасета (строки, колонки):", df.shape)
+print("\nТипы данных:")
+print(df.dtypes)
+
+
+# -------------------------
+# 3.1. Дубликаты
+# -------------------------
+
+print("\n=== ДУБЛИКАТЫ ===")
+duplicates_count = df.duplicated().sum()
+print("Количество полных дубликатов:", duplicates_count)
+
+# При желании можем их удалить (как правило, их почти нет)
+if duplicates_count > 0:
+    df = df.drop_duplicates()
+    print("После удаления дублей размер:", df.shape)
+
+
+# -------------------------
+# 3.2. Пропуски (на этом этапе их быть не должно, но проверяем)
+# -------------------------
+
+print("\n=== ПРОПУСКИ ===")
+missing = df.isna().sum()
+print("Количество пропусков по столбцам:")
+print(missing)
+
+
+# -------------------------
+# 3.3. Числовые столбцы и базовые статистики
+# -------------------------
+
+numeric_cols = [
+    "float_min",
+    "float_max",
+    "market_price_rub",
+    "market_avg_price_rub",
+    "market_buy_order_rub",
+    "market_popularity_7d",
+]
+
+print("\n=== ОПИСАТЕЛЬНАЯ СТАТИСТИКА ПО ЧИСЛОВЫМ ПОЛЯМ ===")
+print(df[numeric_cols].describe(percentiles=[0.01, 0.25, 0.5, 0.75, 0.99]))
+
+
+# -------------------------
+# 3.4. Пользовательские метрики (добавляем только для анализа)
+# -------------------------
+
+# диапазон флоатов
+df["float_range"] = df["float_max"] - df["float_min"]
+
+# спред между текущей ценой и лучшей заявкой на покупку
+df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"]
+
+# отношение текущей цены к средней
+df["price_to_avg_ratio"] = df["market_price_rub"] / df["market_avg_price_rub"]
+
+# логарифм цены (чтобы «сжать» распределение)
+df["log_price"] = np.log1p(df["market_price_rub"])
+
+print("\n=== ОПИСАТЕЛЬНАЯ СТАТИСТИКА ПО ПОЛЬЗОВАТЕЛЬСКИМ МЕТРИКАМ ===")
+print(df[["float_range", "spread_price_buy", "price_to_avg_ratio", "log_price"]].describe())
+
+
+# -------------------------
+# 3.5. Уникальные значения и распределения категорий
+# -------------------------
+
+print("\n=== УНИКАЛЬНЫЕ ЗНАЧЕНИЯ ===")
+print("Уникальных предметов (market_hash_name):", df["market_hash_name"].nunique())
+print("Уникальных видов оружия (weapon_name):  ", df["weapon_name"].nunique())
+print("Уникальных редкостей:", df["market_ru_rarity"].nunique())
+print("Уникальных качеств:", df["market_ru_quality"].nunique())
+
+print("\nРаспределение по редкости:")
+print(df["market_ru_rarity"].value_counts())
+
+print("\nРаспределение по качеству:")
+print(df["market_ru_quality"].value_counts())
+
+print("\nДоля StatTrak:", df["is_stattrak"].mean())
+print("Доля Souvenir:", df["is_souvenir"].mean())
+
+
+# -------------------------
+# 3.6. Средние показатели по группам (редкость / оружие)
+# -------------------------
+
+print("\n=== СРЕДНЯЯ ЦЕНА ПО РЕДКОСТИ ===")
+mean_price_by_rarity = df.groupby("market_ru_rarity")["market_price_rub"].mean().sort_values(ascending=False)
+print(mean_price_by_rarity)
+
+print("\n=== СРЕДНЯЯ ПОПУЛЯРНОСТЬ ПО РЕДКОСТИ ===")
+mean_pop_by_rarity = df.groupby("market_ru_rarity")["market_popularity_7d"].mean().sort_values(ascending=False)
+print(mean_pop_by_rarity)
+
+print("\n=== ТОП-10 ОРУЖИЙ ПО СРЕДНЕЙ ЦЕНЕ ===")
+mean_price_by_weapon = df.groupby("weapon_name")["market_price_rub"].mean().sort_values(ascending=False).head(10)
+print(mean_price_by_weapon)
+
+
+# -------------------------
+# 3.7. Поиск аномальных значений (по цене через IQR)
+# -------------------------
+
+print("\n=== АНАЛИЗ АНОМАЛИЙ ПО ЦЕНЕ ===")
+Q1 = df["market_price_rub"].quantile(0.25)
+Q3 = df["market_price_rub"].quantile(0.75)
+IQR = Q3 - Q1
+lower_bound = Q1 - 1.5 * IQR
+upper_bound = Q3 + 1.5 * IQR
+
+outliers_mask = (df["market_price_rub"] < lower_bound) | (df["market_price_rub"] > upper_bound)
+outliers_count = outliers_mask.sum()
+print(f"Границы для цены: [{lower_bound:.2f}, {upper_bound:.2f}]")
+print("Количество выбросов по цене (по правилу 1.5 IQR):", outliers_count)
+
+# При желании можно посмотреть несколько самых дорогих и самых дешёвых
+print("\nТоп-5 самых дорогих предметов:")
+print(df.sort_values("market_price_rub", ascending=False).head(5)[
+    ["market_hash_name", "market_price_rub", "market_ru_rarity", "weapon_name"]
+])
+
+print("\nТоп-5 самых дешёвых предметов:")
+print(df.sort_values("market_price_rub", ascending=True).head(5)[
+    ["market_hash_name", "market_price_rub", "market_ru_rarity", "weapon_name"]
+])
+
+
+# -------------------------
+# 3.8. Корреляции между числовыми признаками
+# -------------------------
+
+print("\n=== КОРРЕЛЯЦИИ ЧИСЛОВЫХ ПРИЗНАКОВ ===")
+corr = df[[
+    "market_price_rub",
+    "market_avg_price_rub",
+    "market_buy_order_rub",
+    "market_popularity_7d",
+    "float_min",
+    "float_max",
+    "float_range",
+    "spread_price_buy",
+    "price_to_avg_ratio",
+]].corr()
+
+print(corr)
