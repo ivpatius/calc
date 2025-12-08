@@ -1,0 +1,151 @@
+import requests
+import pandas as pd
+
+# =========================
+# 1. Загрузка цен с market.csgo.com
+# =========================
+
+MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json"
+resp_market = requests.get(MARKET_URL)
+resp_market.raise_for_status()
+market_json = resp_market.json()
+
+# market_json["items"] — это словарь:
+# "classid_instanceid": {price, avg_price, buy_order, popularity_7d, market_hash_name, ru_rarity, ...}
+market_items = market_json["items"]
+
+market_rows = []
+for class_instance, item in market_items.items():
+    # бывают элементы без имени — пропускаем
+    name = item.get("market_hash_name")
+    if not name:
+        continue
+
+    def to_float(x):
+        if x in (None, "", "0"):
+            return None
+        try:
+            return float(x)
+        except ValueError:
+            return None
+
+    market_rows.append({
+        "class_instance": class_instance,
+        "market_hash_name": name,
+        "price_rub": to_float(item.get("price")),
+        "avg_price_rub": to_float(item.get("avg_price")),
+        "buy_order_rub": to_float(item.get("buy_order")),
+        "popularity_7d": int(item.get("popularity_7d") or 0),
+        "ru_rarity_market": item.get("ru_rarity"),
+        "ru_quality_market": item.get("ru_quality")
+    })
+
+df_market = pd.DataFrame(market_rows)
+print("Строк после market.csgo.com:", len(df_market))
+
+
+# =========================
+# 2. Загрузка метаданных по скинам из ByMykel CSGO-API
+# =========================
+
+SKINS_URL = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json"
+resp_skins = requests.get(SKINS_URL)
+resp_skins.raise_for_status()
+skins_json = resp_skins.json()
+
+skins_rows = []
+for skin in skins_json:
+    name = skin.get("market_hash_name")
+    if not name:
+        continue
+
+    rarity = skin.get("rarity") or {}
+    wear = skin.get("wear") or {}
+    weapon = skin.get("weapon") or {}
+
+    skins_rows.append({
+        "market_hash_name": name,
+        "item_name": skin.get("name"),
+        "weapon_name": weapon.get("name"),
+        "rarity_api": rarity.get("name"),
+        "rarity_color": rarity.get("color"),
+        "wear_tier": wear.get("name"),  # Factory New, Minimal Wear и т.д.
+        "float_min": skin.get("min_float"),
+        "float_max": skin.get("max_float"),
+        "is_stattrak": bool(skin.get("stattrak")),
+        "is_souvenir": bool(skin.get("souvenir"))
+    })
+
+df_skins = pd.DataFrame(skins_rows)
+print("Строк после CSGO-API:", len(df_skins))
+
+
+# =========================
+# 3. Джоин по market_hash_name
+# =========================
+
+df = df_market.merge(df_skins, on="market_hash_name", how="inner")
+print("Строк после merge:", len(df))
+
+# Если вдруг строк слишком много, можно случайно подсэмплировать:
+# df = df.sample(n=5000, random_state=42)
+
+
+# =========================
+# 4. Пользовательские метрики
+# =========================
+
+# Длина названия
+df["name_length"] = df["item_name"].astype(str).str.len()
+
+# Диапазон флоатов
+df["float_range"] = df["float_max"] - df["float_min"]
+
+# Отношение текущей цены к средней (осторожно с делением на 0)
+df["price_to_avg_ratio"] = df.apply(
+    lambda row: row["price_rub"] / row["avg_price_rub"]
+    if row["price_rub"] is not None
+    and row["avg_price_rub"] not in (None, 0)
+    else None,
+    axis=1
+)
+
+# Можно нормализовать популярность как прокси объёма
+# (например, популярность / максимальная популярность)
+max_pop = df["popularity_7d"].max()
+df["popularity_7d_norm"] = df["popularity_7d"] / max_pop if max_pop else 0
+
+# Оставим только нужные столбцы (можешь подправить состав под себя)
+cols = [
+    "item_name",
+    "market_hash_name",
+    "weapon_name",
+    "price_rub",
+    "avg_price_rub",
+    "buy_order_rub",
+    "rarity_api",
+    "ru_rarity_market",
+    "wear_tier",
+    "float_min",
+    "float_max",
+    "float_range",
+    "popularity_7d",
+    "popularity_7d_norm",
+    "is_stattrak",
+    "is_souvenir",
+    "name_length",
+    "price_to_avg_ratio"
+]
+
+df_final = df[cols].dropna(subset=["price_rub"])  # например, выбросить строки без цены
+
+print("Финальное число строк:", len(df_final))
+print("Пример:")
+print(df_final.head())
+
+
+# =========================
+# 5. Сохранение в CSV
+# =========================
+
+df_final.to_csv("cs2_items_market.csv", index=False, encoding="utf-8-sig")
