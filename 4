@@ -3,19 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# базовые настройки отображения в pandas / numpy
-pd.set_option("display.max_rows", 50)
-pd.set_option("display.max_columns", 50)
-pd.set_option("display.width", 120)
-pd.set_option("display.float_format", lambda x: f"{x:.2f}")
-np.set_printoptions(suppress=True)
-
-# =====================================
-# 1–2. Сбор данных и формирование таблицы
-# =====================================
-
-# Сначала получаем данные о ценах и популярности с market.csgo.com
-MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json"
+# сначала получаем данные о ценах и популярности с market.csgo.com
+MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json" # Это один из самых крупных сайтов по продаже скинов 
 
 resp_market = requests.get(MARKET_URL)
 resp_market.raise_for_status()
@@ -24,40 +13,37 @@ market_items = market_json["items"]
 
 market_rows = []
 
-def to_float(x):
-    # Пробуем привести к float, если не получается — возвращаем None
+def to_float(x): # пытаемся перевести в float, так как может быть беда беда
     try:
         return float(x)
     except (TypeError, ValueError):
         return None
 
-def to_int(x):
-    # Пробуем привести к int, если не получается — возвращаем None
+def to_int(x): # тут то же самое
     try:
         return int(x)
     except (TypeError, ValueError):
         return None
 
-for _, item in market_items.items():
+for j, item in market_items.items():
     name = item.get("market_hash_name")
     if not name:
         continue
 
     market_rows.append(
-        {
-            "market_hash_name": name,
-            "market_price_rub": to_float(item.get("price")),
-            "market_avg_price_rub": to_float(item.get("avg_price")),
-            "market_buy_order_rub": to_float(item.get("buy_order")),
-            "market_popularity_7d": to_int(item.get("popularity_7d")),
-            "market_ru_rarity": item.get("ru_rarity"),
-            "market_ru_quality": item.get("ru_quality"),
+        {"market_hash_name": name,
+         "market_price_rub": to_float(item.get("price")),
+          "market_avg_price_rub": to_float(item.get("avg_price")),
+          "market_buy_order_rub": to_float(item.get("buy_order")),
+          "market_popularity_7d": to_int(item.get("popularity_7d")),
+          "market_ru_rarity": item.get("ru_rarity"),
+          "market_ru_quality": item.get("ru_quality")
         }
     )
 
-df_market = pd.DataFrame(market_rows)
+df_market = pd.DataFrame(market_rows) # Первая половина есть, но нам мало колонок
 
-# Теперь подтягиваем дополнительную информацию по скинам из CSGO-API (ByMykel)
+# тянем доп инфу по скинам с кс го апи, чтобы прибавить инфы для анализа 
 SKINS_URL = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json"
 
 resp_skins = requests.get(SKINS_URL)
@@ -88,13 +74,14 @@ for skin in skins_json:
 
 df_skins = pd.DataFrame(skins_rows)
 
-# Объединяем две таблицы по market_hash_name и убираем строки с пропусками
+# объединяем две таблицы по market_hash_name и убираем пропуски
+# это надо для того чтобы работать с фулл заполненой таблицей со всеми крутыми ячейками
 df_full = df_market.merge(df_skins, on="market_hash_name", how="inner")
 df_full = df_full.replace("", pd.NA)
 df_clean = df_full.dropna(how="any")
 
-# Приводим столбцы в удобный порядок:
-# сначала описание предмета, затем характеристики, потом цены/популярность
+
+# сортировка: сначала описание предмета, затем характеристики, потом цены/популярность
 cols_order = [
     "market_hash_name",
     "weapon_name",
@@ -113,148 +100,89 @@ cols_order = [
 
 df_clean = df_clean[cols_order]
 
-# Сохраняем итоговую таблицу для дальнейшей работы
+# сохраняем итоговую таблицу 
 df_clean.to_csv("cs2_items.csv", index=False, encoding="utf-8-sig")
 
-# Для анализа дальше используем копию этой таблицы
+# для анализа дальше используем копию этой таблицы
 df = df_clean.copy()
 
-# =====================================
-# 3. Базовый анализ в pandas
-# =====================================
 
-# Здесь добавляем несколько вспомогательных метрик:
-# 1) разница между текущей ценой и лучшим buy order
-# 2) отношение текущей цены к средней
-# 3) логарифм цены для более ровного распределения
-df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"]
-denom = df["market_avg_price_rub"].replace(0, np.nan)
-df["price_to_avg_ratio"] = df["market_price_rub"] / denom
-df["log_price"] = np.log1p(df["market_price_rub"])
+df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"] # считаем спред цены
+avg = df["market_avg_price_rub"].replace(0, np.nan)
+df["price_to_avg_ratio"] = df["market_price_rub"] / avg # отношение текущей цены к средней
 
-# Ниже — несколько базовых характеристик: дубли, уникальные значения,
+
 # распределения по категориям и описательная статистика по числам.
 
 total_missing = int(df.isna().sum().sum())
 print("Общее количество пропусков:", total_missing)
-
-dup_count = df.duplicated().sum()
+print("")
+dup_count = df.duplicated().sum() # тут убираем дубликаты они нам не нужны мы индивиды в этом бренном мире
 print("Полных дубликатов:", dup_count)
+print("")
 if dup_count > 0:
     df = df.drop_duplicates()
 
-print("\nУникальных предметов (market_hash_name):", df["market_hash_name"].nunique())
-print("Уникальных видов оружия (weapon_name):  ", df["weapon_name"].nunique())
+# тут дальше вроде все чисто и ясно как солнце и небо в летние деньки 
 
-print("\nРаспределение по редкости:")
+print("Уникальных предметов:", df["market_hash_name"].nunique())
+print("")
+print("Уникальных видов оружия:  ", df["weapon_name"].nunique())
+print("")
+print("Распределение по редкости:")
+print("")
 print(df["market_ru_rarity"].value_counts())
-
-print("\nРаспределение по качеству:")
+print("")
+print("Распределение по качеству:")
 print(df["market_ru_quality"].value_counts())
-
-print("\nДоля StatTrak:", df["is_stattrak"].mean())
-print("Доля Souvenir:", df["is_souvenir"].mean())
-
-print("\nОписательная статистика по цене (market_price_rub):")
+print("")
+print("Доля статтрековских:", df["is_stattrak"].mean())
+print("")
+print("Доля сувенирных:", df["is_souvenir"].mean())
+print("")
+print("Описательная статистика по текущей цене:")
 print(df["market_price_rub"].describe())
-
-print("\nОписательная статистика по популярности (market_popularity_7d):")
+print("")
+print("Описательная статистика по популярности:")
 print(df["market_popularity_7d"].describe())
-
-print("\nОписательная статистика по price_to_avg_ratio:")
+print("")
+print("Описательная статистика по отношение текущей цены к средней:")
 print(df["price_to_avg_ratio"].describe())
+print("")
 
-# Смотрим, как меняется средняя цена и популярность по редкости и качеству
-mean_price_by_rarity = (
-    df.groupby("market_ru_rarity")["market_price_rub"]
-    .mean()
-    .sort_values(ascending=False)
-)
-print("\nСредняя цена по редкости:")
+# меняется ли средняя цена и популярность по редкости и качеству, набиваем крч говоря побольше характеристик
+mean_price_by_rarity = (df.groupby("market_ru_rarity")["market_price_rub"].mean().sort_values(ascending=False))
+print("Средняя цена по редкости:")
 print(mean_price_by_rarity)
+print("")
 
-mean_pop_by_rarity = (
-    df.groupby("market_ru_rarity")["market_popularity_7d"]
-    .mean()
-    .sort_values(ascending=False)
-)
-print("\nСредняя популярность по редкости:")
+# стата по редкости и популярности
+mean_pop_by_rarity = (df.groupby("market_ru_rarity")["market_popularity_7d"].mean().sort_values(ascending=False))
+print("Средняя популярность по редкости:")
 print(mean_pop_by_rarity)
+print("")
 
-mean_price_by_quality = (
-    df.groupby("market_ru_quality")["market_price_rub"]
-    .mean()
-    .sort_values(ascending=False)
-)
-print("\nСредняя цена по качеству:")
+# стата по качеству и цене
+mean_price_by_quality = (df.groupby("market_ru_quality")["market_price_rub"].mean().sort_values(ascending=False))
+print("Средняя цена по качеству:")
 print(mean_price_by_quality)
+print("")
 
-# Корреляции между ценой, средней ценой, buy order, популярностью и нашими метриками
-corr_cols = [
-    "market_price_rub",
-    "market_avg_price_rub",
-    "market_buy_order_rub",
-    "market_popularity_7d",
-    "spread_price_buy",
-    "price_to_avg_ratio",
-    "log_price",
-]
+# корреляции между ценой, средней ценой, ценой на оредер покупки, популярностью, спреду
+corr_cols = ["market_price_rub",
+             "market_avg_price_rub",
+             "market_buy_order_rub",
+             "market_popularity_7d",
+             "spread_price_buy"]
 corr = df[corr_cols].corr()
-print("\nКорреляция числовых признаков:")
+print("Корреляция числовых признаков:")
 print(corr)
+print("")
 
-# Простая «ожидаемая» цена по комбинации признаков:
-# редкость, качество, StatTrak, Souvenir
-group_cols = ["market_ru_rarity", "market_ru_quality", "is_stattrak", "is_souvenir"]
-df_model = df.copy()
 
-group_mean_price = (
-    df_model.groupby(group_cols)["market_price_rub"]
-    .mean()
-    .reset_index()
-    .rename(columns={"market_price_rub": "expected_price_group"})
-)
 
-df_model = df_model.merge(group_mean_price, on=group_cols, how="left")
-df_model["price_deviation"] = df_model["market_price_rub"] - df_model["expected_price_group"]
-
-print("\nТоп-10 предметов с максимальным завышением относительно своей группы:")
-print(
-    df_model.sort_values("price_deviation", ascending=False)[
-        [
-            "market_hash_name",
-            "market_ru_rarity",
-            "market_ru_quality",
-            "is_stattrak",
-            "is_souvenir",
-            "market_price_rub",
-            "expected_price_group",
-            "price_deviation",
-        ]
-    ].head(10)
-)
-
-print("\nТоп-10 предметов с максимальным занижением относительно своей группы:")
-print(
-    df_model.sort_values("price_deviation", ascending=True)[
-        [
-            "market_hash_name",
-            "market_ru_rarity",
-            "market_ru_quality",
-            "is_stattrak",
-            "is_souvenir",
-            "market_price_rub",
-            "expected_price_group",
-            "price_deviation",
-        ]
-    ].head(10)
-)
-
-# =====================================
-# 4. Графики в matplotlib
-# =====================================
-
-# Гистограмма цен
+#Тут начианем клипать графики, сначала простые
+# гистограмма маркет прайса и кол-ва предметов 1
 plt.figure()
 df["market_price_rub"].hist(bins=50)
 plt.xlabel("Цена, руб.")
@@ -264,7 +192,7 @@ plt.yscale("log")
 plt.tight_layout()
 plt.show()
 
-# Гистограмма популярности
+# гистограмма популярности и кол-ва предметов в обороте маркета 2
 plt.figure()
 df["market_popularity_7d"].hist(bins=50)
 plt.xlabel("Популярность за 7 дней")
@@ -274,65 +202,59 @@ plt.yscale("log")
 plt.tight_layout()
 plt.show()
 
-# Гистограмма отношения текущей цены к средней
+# боксплот цены по редкости 3
 plt.figure()
-df["price_to_avg_ratio"].hist(bins=50)
-plt.xlabel("Текущая цена / средняя цена")
-plt.ylabel("Количество предметов")
-plt.title("Распределение отношения текущей цены к средней")
-plt.tight_layout()
-plt.show()
-
-# Boxplot цены по редкости
-plt.figure()
-df.boxplot(column="market_price_rub", by="market_ru_rarity", rot=45)
+df.boxplot(column="market_price_rub", by="market_ru_rarity", rot=60)
 plt.ylabel("Цена, руб.")
 plt.title("Цена по редкости")
+plt.xlabel("")
 plt.suptitle("")
 plt.tight_layout()
 plt.show()
 
-# Средняя цена по редкости (barplot)
+# средняя цена по редкости 4
 plt.figure()
 mean_price_by_rarity.plot(kind="bar")
 plt.ylabel("Средняя цена, руб.")
 plt.title("Средняя цена по редкости")
-plt.xticks(rotation=45)
+plt.xlabel("")
+plt.xticks(rotation=60)
 plt.tight_layout()
 plt.show()
 
-# Количество предметов по редкости
+# Количество предметов по редкости 5
 plt.figure()
 df["market_ru_rarity"].value_counts().plot(kind="bar")
 plt.ylabel("Количество предметов")
 plt.title("Количество предметов по редкости")
-plt.xticks(rotation=45)
+plt.xlabel("")
+plt.xticks(rotation=60)
 plt.tight_layout()
 plt.show()
 
-# Scatter: цена vs популярность
+# график цена и популярность
 plt.figure()
 plt.scatter(df["market_price_rub"], df["market_popularity_7d"])
 plt.xlabel("Цена, руб.")
-plt.ylabel("Популярность за 7 дней")
-plt.title("Цена и популярность")
+plt.ylabel("Популярность за 7 дней в пуле маркета")
+plt.title("Цена/популярность")
 plt.xscale("log")
 plt.yscale("log")
 plt.tight_layout()
 plt.show()
 
-# Scatter: текущая цена vs средняя цена
+#  график текущая цена vs средняя цена
 plt.figure()
 plt.scatter(df["market_avg_price_rub"], df["market_price_rub"])
 plt.xlabel("Средняя цена, руб.")
 plt.ylabel("Текущая цена, руб.")
-plt.title("Текущая цена и средняя цена")
+plt.title("Текущая цена/средняя цена")
 plt.xscale("log")
 plt.yscale("log")
 plt.tight_layout()
 plt.show()
 
-# Доля StatTrak по оружию (топ-10)
+# доля статрек предметов топ 10 
 st_share_by_weapon = (
     df.groupby("weapon_name")["is_stattrak"]
     .mean()
@@ -342,22 +264,22 @@ st_share_by_weapon = (
 plt.figure()
 st_share_by_weapon.plot(kind="bar")
 plt.ylabel("Доля StatTrak")
-plt.title("Доля StatTrak по оружию (топ-10)")
+plt.title("Доля StatTrak предметов")
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# Топ-20 самых популярных предметов
+# 20 самых популярных предметов на маркете
 top_popular = df.sort_values("market_popularity_7d", ascending=False).head(20)
 plt.figure()
 plt.barh(top_popular["market_hash_name"], top_popular["market_popularity_7d"])
 plt.xlabel("Популярность за 7 дней")
-plt.title("Топ-20 популярных предметов")
+plt.title("20 сымых популярных предметов")
 plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.show()
 
-# Тепловая карта корреляций
+# тепловая карта корреляций которые мы до этого уже посчитали и вывели в прошлом пункте 
 plt.figure()
 plt.imshow(corr, interpolation="nearest")
 plt.xticks(range(len(corr)), corr.columns, rotation=90)
