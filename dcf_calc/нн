@@ -76,15 +76,12 @@ for skin in skins_json:
 
     skins_rows.append({
         "market_hash_name": name,
-        "item_description": skin.get("description"),
         "weapon_name": weapon.get("name"),
-        "rarity_name": rarity.get("name"),
         "float_min": skin.get("min_float"),
         "float_max": skin.get("max_float"),
         "pattern_name": pattern.get("name"),
         "is_stattrak": bool(skin.get("stattrak")),
         "is_souvenir": bool(skin.get("souvenir")),
-        "image_url": image.get("url"),
     })
 
 df_skins = pd.DataFrame(skins_rows)
@@ -117,15 +114,3 @@ print("Финальные колонки:", df_clean.columns.tolist())
 
 df_clean.to_csv("cs2_items_clean.csv", index=False, encoding="utf-8-sig")
 print("Файл cs2_items_clean.csv сохранён.")
-
-# =========================
-# 6. (опционально) 5000 рандомных предметов
-# =========================
-
-N = 5000
-if len(df_clean) >= N:
-    df_sample = df_clean.sample(n=N, random_state=42)
-    df_sample.to_csv("cs2_items_clean_5000.csv", index=False, encoding="utf-8-sig")
-    print("Файл cs2_items_clean_5000.csv сохранён (рандомные 5000 строк).")
-else:
-    print(f"Всего {len(df_clean)} строк, меньше чем {N} — отдельный сэмпл не создаётся.")
