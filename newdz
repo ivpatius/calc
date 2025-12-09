@@ -1,0 +1,182 @@
+# Если запускаешь в новой среде, сначала раскомментируй и выполни эти две строки ОТДЕЛЬНО:
+# !pip install playwright pandas
+# !playwright install chromium
+
+import re
+from dataclasses import dataclass, asdict
+
+import pandas as pd
+from playwright.sync_api import sync_playwright
+
+
+@dataclass
+class Product:
+    title: str
+    price: int
+    link: str
+    page: int
+
+
+def parse_price(price_text: str):
+    """
+    Преобразуем строку вида '1 234 ₽' в int 1234.
+    Если не получилось — вернём None.
+    """
+    if price_text is None:
+        return None
+    digits = re.sub(r"\D", "", price_text)
+    return int(digits) if digits else None
+
+
+def main():
+    products = []
+    search_query = "елка"
+    base_search_url = "https://www.wildberries.ru/catalog/0/search.aspx?search=елка&page={page}"
+
+    with sync_playwright() as p:
+        # Запуск браузера (headless=False — чтобы видеть, что происходит)
+        browser = p.chromium.launch(headless=False, slow_mo=300)
+        context = browser.new_context(
+            locale="ru-RU",
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+        )
+        page = context.new_page()
+
+        # 1. Переход на главную Wildberries
+        page.goto("https://www.wildberries.ru", wait_until="networkidle")
+        page.wait_for_timeout(3000)  # подождем чуть-чуть
+
+        # 2. Пытаемся закрыть всплывающие окна (регион, куки и т.п.)
+        popup_selectors = [
+            "button:has-text('Сохранить')",
+            "button:has-text('Хорошо')",
+            "button:has-text('Да')",
+            "button[data-wba-header-name='ReactModalClose']",
+        ]
+        for sel in popup_selectors:
+            try:
+                page.locator(sel).first.click(timeout=2000)
+                break
+            except Exception:
+                pass
+
+        # 3. Имитируем ввод "елка" в строку поиска
+        try:
+            search_input = page.locator("input[id='searchInput']")
+            search_input.fill(search_query)
+            search_input.press("Enter")
+        except Exception:
+            # Если селектор не подошёл — просто сразу переходим на URL поиска
+            page.goto(base_search_url.format(page=1), wait_until="networkidle")
+
+        page.wait_for_timeout(3000)
+
+        # 4. Обходим первые пять страниц с результатами
+        for page_num in range(1, 6):
+            print(f"Собираю данные со страницы {page_num}...")
+
+            page.goto(base_search_url.format(page=page_num), wait_until="networkidle")
+            page.wait_for_timeout(3000)
+
+            # Локатор для карточек товара (при необходимости можно поменять по верстке)
+            cards = page.locator("article.product-card")
+
+            try:
+                count = cards.count()
+            except Exception:
+                count = 0
+
+            print(f"Найдено карточек: {count}")
+
+            for i in range(count):
+                card = cards.nth(i)
+
+                # Название товара
+                try:
+                    title_part1 = card.locator("span.product-card__brand").inner_text(timeout=2000)
+                except Exception:
+                    title_part1 = ""
+                try:
+                    title_part2 = card.locator("span.product-card__name").inner_text(timeout=2000)
+                except Exception:
+                    title_part2 = ""
+
+                title = (title_part1 + " " + title_part2).strip()
+
+                # Цена товара
+                price_text = None
+                for sel in [
+                    "span.price__lower-price",
+                    "ins.price__lower-price",
+                    "span.lower-price",
+                ]:
+                    try:
+                        price_text = card.locator(sel).first.inner_text(timeout=2000)
+                        if price_text:
+                            break
+                    except Exception:
+                        continue
+
+                price = parse_price(price_text)
+
+                # Ссылка на карточку
+                link = None
+                try:
+                    href = card.locator("a").first.get_attribute("href")
+                    if href:
+                        if href.startswith("http"):
+                            link = href
+                        else:
+                            link = "https://www.wildberries.ru" + href
+                except Exception:
+                    link = None
+
+                # Фильтруем: нужны только нормальные товары с названием, ценой и ссылкой
+                if title and price is not None and link:
+                    products.append(
+                        Product(
+                            title=title,
+                            price=price,
+                            link=link,
+                            page=page_num
+                        )
+                    )
+
+        browser.close()
+
+    # 5. Переводим в pandas и сохраняем в CSV
+    df = pd.DataFrame([asdict(p) for p in products])
+    print("Всего записей собрано:", len(df))
+
+    csv_filename = "wildberries_elki.csv"
+    df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
+    print(f"Данные сохранены в файл {csv_filename}")
+
+    # 6. Находим самую дешевую и самую дорогую ёлку
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df_clean = df.dropna(subset=["price"]).copy()
+
+    if len(df_clean) == 0:
+        print("Не удалось найти товары с корректной ценой.")
+        return
+
+    cheapest = df_clean.loc[df_clean["price"].idxmin()]
+    most_expensive = df_clean.loc[df_clean["price"].idxmax()]
+
+    print("\n=== Самая дешёвая ёлка ===")
+    print("Название:", cheapest["title"])
+    print("Цена:", int(cheapest["price"]), "₽")
+    print("Ссылка:", cheapest["link"])
+
+    print("\n=== Самая дорогая ёлка ===")
+    print("Название:", most_expensive["title"])
+    print("Цена:", int(most_expensive["price"]), "₽")
+    print("Ссылка:", most_expensive["link"])
+
+
+if __name__ == "__main__":
+    main()
