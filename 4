@@ -1,222 +1,252 @@
-# ============================================================
-# 0. Системные библиотеки + Python-библиотеки
-# ============================================================
+Get:1 https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/ InRelease [3,632 B]
+Get:2 https://cli.github.com/packages stable InRelease [3,917 B]
+Get:3 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64  InRelease [1,581 B]
+Get:4 http://security.ubuntu.com/ubuntu jammy-security InRelease [129 kB]
+Hit:5 http://archive.ubuntu.com/ubuntu jammy InRelease
+Get:6 https://r2u.stat.illinois.edu/ubuntu jammy InRelease [6,555 B]
+Get:7 https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/ Packages [83.6 kB]
+Get:8 http://archive.ubuntu.com/ubuntu jammy-updates InRelease [128 kB]
+Get:9 https://cli.github.com/packages stable/main amd64 Packages [345 B]
+Get:10 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64  Packages [2,202 kB]
+Get:11 https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy InRelease [18.1 kB]
+Hit:12 https://ppa.launchpadcontent.net/graphics-drivers/ppa/ubuntu jammy InRelease
+Get:13 https://r2u.stat.illinois.edu/ubuntu jammy/main amd64 Packages [2,845 kB]
+Hit:14 https://ppa.launchpadcontent.net/ubuntugis/ppa/ubuntu jammy InRelease
+Get:15 http://archive.ubuntu.com/ubuntu jammy-backports InRelease [127 kB]
+Get:16 http://security.ubuntu.com/ubuntu jammy-security/universe amd64 Packages [1,286 kB]
+Get:17 https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu jammy/main amd64 Packages [38.5 kB]
+Get:18 https://r2u.stat.illinois.edu/ubuntu jammy/main all Packages [9,525 kB]
+Get:19 http://archive.ubuntu.com/ubuntu jammy-updates/universe amd64 Packages [1,599 kB]
+Get:20 http://security.ubuntu.com/ubuntu jammy-security/main amd64 Packages [3,576 kB]
+Get:21 http://security.ubuntu.com/ubuntu jammy-security/restricted amd64 Packages [6,087 kB]
+Get:22 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 Packages [3,950 kB]
+Get:23 http://archive.ubuntu.com/ubuntu jammy-updates/restricted amd64 Packages [6,385 kB]
+Fetched 38.0 MB in 4s (9,095 kB/s)
+Reading package lists... Done
+W: Skipping acquire of configured file 'main/source/Sources' as repository 'https://r2u.stat.illinois.edu/ubuntu jammy InRelease' does not seem to provide it (sources.list entry misspelt?)
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+fonts-liberation is already the newest version (1:1.07.4-11).
+libasound2 is already the newest version (1.2.6.1-1ubuntu1).
+libasound2 set to manually installed.
+libcairo2 is already the newest version (1.16.0-5ubuntu2).
+libcairo2 set to manually installed.
+libxdamage1 is already the newest version (1:1.1.5-2build2).
+libxdamage1 set to manually installed.
+libxfixes3 is already the newest version (1:6.0.0-1).
+libxfixes3 set to manually installed.
+libxkbcommon0 is already the newest version (1.4.0-1).
+libxkbcommon0 set to manually installed.
+libxrandr2 is already the newest version (2:1.5.2-1build1).
+libxrandr2 set to manually installed.
+libxshmfence1 is already the newest version (1.3-1build4).
+libxshmfence1 set to manually installed.
+libxss1 is already the newest version (1:1.2.3-1build2).
+libxss1 set to manually installed.
+libgbm1 is already the newest version (23.2.1-1ubuntu3.1~22.04.3).
+libgbm1 set to manually installed.
+libnss3 is already the newest version (2:3.98-0ubuntu0.22.04.2).
+libnss3 set to manually installed.
+libpango-1.0-0 is already the newest version (1.50.6+ds-2ubuntu1).
+libpango-1.0-0 set to manually installed.
+libpangocairo-1.0-0 is already the newest version (1.50.6+ds-2ubuntu1).
+libpangocairo-1.0-0 set to manually installed.
+libwayland-client0 is already the newest version (1.20.0-1ubuntu0.1).
+libwayland-client0 set to manually installed.
+libwayland-server0 is already the newest version (1.20.0-1ubuntu0.1).
+libwayland-server0 set to manually installed.
+libx11-xcb1 is already the newest version (2:1.7.5-1ubuntu0.3).
+libx11-xcb1 set to manually installed.
+The following additional packages will be installed:
+  at-spi2-core gsettings-desktop-schemas libatk1.0-data libgtk-3-0
+  libgtk-3-bin libgtk-3-common librsvg2-common session-migration
+Suggested packages:
+  indicator-application gvfs
+The following NEW packages will be installed:
+  at-spi2-core gsettings-desktop-schemas libappindicator3-1 libatk-bridge2.0-0
+  libatk1.0-0 libatk1.0-data libatspi2.0-0 libdbusmenu-glib4
+  libdbusmenu-gtk3-4 libgtk-3-0 libgtk-3-bin libgtk-3-common librsvg2-common
+  libxcomposite1 libxtst6 session-migration
+0 upgraded, 16 newly installed, 0 to remove and 75 not upgraded.
+Need to get 3,797 kB of archives.
+After this operation, 13.3 MB of additional disk space will be used.
+Get:1 http://archive.ubuntu.com/ubuntu jammy/main amd64 libatspi2.0-0 amd64 2.44.0-3 [80.9 kB]
+Get:2 http://archive.ubuntu.com/ubuntu jammy/main amd64 libxtst6 amd64 2:1.2.3-1build4 [13.4 kB]
+Get:3 http://archive.ubuntu.com/ubuntu jammy/main amd64 session-migration amd64 0.3.6 [9,774 B]
+Get:4 http://archive.ubuntu.com/ubuntu jammy/main amd64 gsettings-desktop-schemas all 42.0-1ubuntu1 [31.1 kB]
+Get:5 http://archive.ubuntu.com/ubuntu jammy/main amd64 at-spi2-core amd64 2.44.0-3 [54.4 kB]
+Get:6 http://archive.ubuntu.com/ubuntu jammy/main amd64 libdbusmenu-glib4 amd64 16.04.1+18.10.20180917-0ubuntu8 [45.4 kB]
+Get:7 http://archive.ubuntu.com/ubuntu jammy/main amd64 libatk1.0-data all 2.36.0-3build1 [2,824 B]
+Get:8 http://archive.ubuntu.com/ubuntu jammy/main amd64 libatk1.0-0 amd64 2.36.0-3build1 [51.9 kB]
+Get:9 http://archive.ubuntu.com/ubuntu jammy/main amd64 libdbusmenu-gtk3-4 amd64 16.04.1+18.10.20180917-0ubuntu8 [31.0 kB]
+Get:10 http://archive.ubuntu.com/ubuntu jammy/main amd64 libatk-bridge2.0-0 amd64 2.38.0-3 [66.6 kB]
+Get:11 http://archive.ubuntu.com/ubuntu jammy/main amd64 libxcomposite1 amd64 1:0.4.5-1build2 [7,192 B]
+Get:12 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libgtk-3-common all 3.24.33-1ubuntu2.2 [239 kB]
+Get:13 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libgtk-3-0 amd64 3.24.33-1ubuntu2.2 [3,053 kB]
+Get:14 http://archive.ubuntu.com/ubuntu jammy/universe amd64 libappindicator3-1 amd64 12.10.1+20.10.20200706.1-0ubuntu1 [23.2 kB]
+Get:15 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 libgtk-3-bin amd64 3.24.33-1ubuntu2.2 [69.6 kB]
+Get:16 http://archive.ubuntu.com/ubuntu jammy-updates/main amd64 librsvg2-common amd64 2.52.5+dfsg-3ubuntu0.2 [17.7 kB]
+Fetched 3,797 kB in 2s (2,166 kB/s)
+Selecting previously unselected package libatspi2.0-0:amd64.
+(Reading database ... 121713 files and directories currently installed.)
+Preparing to unpack .../00-libatspi2.0-0_2.44.0-3_amd64.deb ...
+Unpacking libatspi2.0-0:amd64 (2.44.0-3) ...
+Selecting previously unselected package libxtst6:amd64.
+Preparing to unpack .../01-libxtst6_2%3a1.2.3-1build4_amd64.deb ...
+Unpacking libxtst6:amd64 (2:1.2.3-1build4) ...
+Selecting previously unselected package session-migration.
+Preparing to unpack .../02-session-migration_0.3.6_amd64.deb ...
+Unpacking session-migration (0.3.6) ...
+Selecting previously unselected package gsettings-desktop-schemas.
+Preparing to unpack .../03-gsettings-desktop-schemas_42.0-1ubuntu1_all.deb ...
+Unpacking gsettings-desktop-schemas (42.0-1ubuntu1) ...
+Selecting previously unselected package at-spi2-core.
+Preparing to unpack .../04-at-spi2-core_2.44.0-3_amd64.deb ...
+Unpacking at-spi2-core (2.44.0-3) ...
+Selecting previously unselected package libdbusmenu-glib4:amd64.
+Preparing to unpack .../05-libdbusmenu-glib4_16.04.1+18.10.20180917-0ubuntu8_amd64.deb ...
+Unpacking libdbusmenu-glib4:amd64 (16.04.1+18.10.20180917-0ubuntu8) ...
+Selecting previously unselected package libatk1.0-data.
+Preparing to unpack .../06-libatk1.0-data_2.36.0-3build1_all.deb ...
+Unpacking libatk1.0-data (2.36.0-3build1) ...
+Selecting previously unselected package libatk1.0-0:amd64.
+Preparing to unpack .../07-libatk1.0-0_2.36.0-3build1_amd64.deb ...
+Unpacking libatk1.0-0:amd64 (2.36.0-3build1) ...
+Selecting previously unselected package libdbusmenu-gtk3-4:amd64.
+Preparing to unpack .../08-libdbusmenu-gtk3-4_16.04.1+18.10.20180917-0ubuntu8_amd64.deb ...
+Unpacking libdbusmenu-gtk3-4:amd64 (16.04.1+18.10.20180917-0ubuntu8) ...
+Selecting previously unselected package libatk-bridge2.0-0:amd64.
+Preparing to unpack .../09-libatk-bridge2.0-0_2.38.0-3_amd64.deb ...
+Unpacking libatk-bridge2.0-0:amd64 (2.38.0-3) ...
+Selecting previously unselected package libxcomposite1:amd64.
+Preparing to unpack .../10-libxcomposite1_1%3a0.4.5-1build2_amd64.deb ...
+Unpacking libxcomposite1:amd64 (1:0.4.5-1build2) ...
+Selecting previously unselected package libgtk-3-common.
+Preparing to unpack .../11-libgtk-3-common_3.24.33-1ubuntu2.2_all.deb ...
+Unpacking libgtk-3-common (3.24.33-1ubuntu2.2) ...
+Selecting previously unselected package libgtk-3-0:amd64.
+Preparing to unpack .../12-libgtk-3-0_3.24.33-1ubuntu2.2_amd64.deb ...
+Unpacking libgtk-3-0:amd64 (3.24.33-1ubuntu2.2) ...
+Selecting previously unselected package libappindicator3-1.
+Preparing to unpack .../13-libappindicator3-1_12.10.1+20.10.20200706.1-0ubuntu1_amd64.deb ...
+Unpacking libappindicator3-1 (12.10.1+20.10.20200706.1-0ubuntu1) ...
+Selecting previously unselected package libgtk-3-bin.
+Preparing to unpack .../14-libgtk-3-bin_3.24.33-1ubuntu2.2_amd64.deb ...
+Unpacking libgtk-3-bin (3.24.33-1ubuntu2.2) ...
+Selecting previously unselected package librsvg2-common:amd64.
+Preparing to unpack .../15-librsvg2-common_2.52.5+dfsg-3ubuntu0.2_amd64.deb ...
+Unpacking librsvg2-common:amd64 (2.52.5+dfsg-3ubuntu0.2) ...
+Setting up session-migration (0.3.6) ...
+Created symlink /etc/systemd/user/graphical-session-pre.target.wants/session-migration.service → /usr/lib/systemd/user/session-migration.service.
+Setting up libxtst6:amd64 (2:1.2.3-1build4) ...
+Setting up libdbusmenu-glib4:amd64 (16.04.1+18.10.20180917-0ubuntu8) ...
+Setting up libatspi2.0-0:amd64 (2.44.0-3) ...
+Setting up librsvg2-common:amd64 (2.52.5+dfsg-3ubuntu0.2) ...
+Setting up libatk1.0-data (2.36.0-3build1) ...
+Setting up libatk1.0-0:amd64 (2.36.0-3build1) ...
+Setting up libxcomposite1:amd64 (1:0.4.5-1build2) ...
+Setting up libgtk-3-common (3.24.33-1ubuntu2.2) ...
+Setting up gsettings-desktop-schemas (42.0-1ubuntu1) ...
+Setting up libdbusmenu-gtk3-4:amd64 (16.04.1+18.10.20180917-0ubuntu8) ...
+Setting up libatk-bridge2.0-0:amd64 (2.38.0-3) ...
+Processing triggers for man-db (2.10.2-1) ...
+Processing triggers for libgdk-pixbuf-2.0-0:amd64 (2.42.8+dfsg-1ubuntu0.4) ...
+Processing triggers for libglib2.0-0:amd64 (2.72.4-0ubuntu2.6) ...
+Setting up libgtk-3-0:amd64 (3.24.33-1ubuntu2.2) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.8) ...
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_level_zero_v2.so.0 is not a symbolic link
 
-!apt-get update
-!apt-get install -y \
-    libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
-    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 \
-    libasound2 libpangocairo-1.0-0 libnss3 libxshmfence1 \
-    fonts-liberation libwayland-client0 libwayland-server0 \
-    libappindicator3-1 libdbusmenu-glib4 libdbusmenu-gtk3-4 \
-    libxtst6 libxss1 libx11-xcb1
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_opencl.so.0 is not a symbolic link
 
-!pip install playwright nest_asyncio pandas beautifulsoup4
-!playwright install chromium
+/sbin/ldconfig.real: /usr/local/lib/libtcm_debug.so.1 is not a symbolic link
 
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind_2_5.so.3 is not a symbolic link
 
-# ============================================================
-# 1. Импорты и базовая настройка
-# ============================================================
-import asyncio
-import nest_asyncio
-from playwright.async_api import async_playwright
-import pandas as pd
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+/sbin/ldconfig.real: /usr/local/lib/libtbbmalloc.so.2 is not a symbolic link
 
-nest_asyncio.apply()  # чтобы можно было использовать await в Jupyter
+/sbin/ldconfig.real: /usr/local/lib/libtbbmalloc_proxy.so.2 is not a symbolic link
 
+/sbin/ldconfig.real: /usr/local/lib/libtbb.so.12 is not a symbolic link
 
-# ============================================================
-# 2. Вспомогательные функции
-# ============================================================
-def build_url_with_page(base_url: str, page_number: int) -> str:
-    """
-    Берём URL после первого поиска и аккуратно добавляем/меняем параметр page.
-    Так сохраняются все остальные параметры (сортировка и т.п.).
-    """
-    parsed = urlparse(base_url)
-    qs = parse_qs(parsed.query)
-    qs["page"] = [str(page_number)]
-    new_query = urlencode(qs, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_level_zero.so.0 is not a symbolic link
 
+/sbin/ldconfig.real: /usr/local/lib/libur_loader.so.0 is not a symbolic link
 
-def parse_price_to_int(price_text: str):
-    """
-    Переводим цену вида '1 899 ₽' в int 1899.
-    Если цены нет — возвращаем None.
-    """
-    if not price_text:
-        return None
-    digits = "".join(ch for ch in price_text if ch.isdigit())
-    return int(digits) if digits else None
+/sbin/ldconfig.real: /usr/local/lib/libumf.so.1 is not a symbolic link
 
+/sbin/ldconfig.real: /usr/local/lib/libtcm.so.1 is not a symbolic link
 
-async def extract_products_from_page(page):
-    """
-    Достаём товары с текущей страницы WB.
-    Используем JS прямо в DOM: ищем карточки товаров как старого, так и нового форматов.
-    На выходе: список словарей {title, priceText, url}.
-    """
-    products = await page.eval_on_selector_all(
-        "article.product-card, div.dtList-inner",
-        """
-        (cards) => cards
-          .map(card => {
-            const link = card.querySelector('a.product-card__link, a.ref_goods_n_p, a.j-card-link, a.j-open-full-product-card');
-            const url = link ? link.href : '';
+/sbin/ldconfig.real: /usr/local/lib/libhwloc.so.15 is not a symbolic link
 
-            const titleNode = card.querySelector('span.goods-name, span.goods-name.c-text-sm, span.product-card__name');
-            const title = titleNode
-              ? titleNode.textContent.trim()
-              : (link && (link.getAttribute('aria-label') || '')).trim();
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind_2_0.so.3 is not a symbolic link
 
-            const priceNode = card.querySelector('.price__lower-price, ins.lower-price, span.lower-price');
-            const priceText = priceNode
-              ? priceNode.textContent.replace(/[\\s\\u00A0]+/g, ' ').trim()
-              : '';
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind.so.3 is not a symbolic link
 
-            return { title, priceText, url };
-          })
-          .filter(p => p.title && p.url && p.priceText);
-        """
-    )
-    return products
+Setting up libgtk-3-bin (3.24.33-1ubuntu2.2) ...
+Setting up libappindicator3-1 (12.10.1+20.10.20200706.1-0ubuntu1) ...
+Setting up at-spi2-core (2.44.0-3) ...
+Processing triggers for libc-bin (2.35-0ubuntu3.8) ...
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_level_zero_v2.so.0 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_opencl.so.0 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtcm_debug.so.1 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind_2_5.so.3 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbbmalloc.so.2 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbbmalloc_proxy.so.2 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbb.so.12 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libur_adapter_level_zero.so.0 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libur_loader.so.0 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libumf.so.1 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtcm.so.1 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libhwloc.so.15 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind_2_0.so.3 is not a symbolic link
+
+/sbin/ldconfig.real: /usr/local/lib/libtbbbind.so.3 is not a symbolic link
+
+Requirement already satisfied: playwright in /usr/local/lib/python3.12/dist-packages (1.57.0)
+Requirement already satisfied: nest_asyncio in /usr/local/lib/python3.12/dist-packages (1.6.0)
+Requirement already satisfied: pandas in /usr/local/lib/python3.12/dist-packages (2.2.2)
+Requirement already satisfied: beautifulsoup4 in /usr/local/lib/python3.12/dist-packages (4.13.5)
+Requirement already satisfied: pyee<14,>=13 in /usr/local/lib/python3.12/dist-packages (from playwright) (13.0.0)
+Requirement already satisfied: greenlet<4.0.0,>=3.1.1 in /usr/local/lib/python3.12/dist-packages (from playwright) (3.3.0)
+Requirement already satisfied: numpy>=1.26.0 in /usr/local/lib/python3.12/dist-packages (from pandas) (2.0.2)
+Requirement already satisfied: python-dateutil>=2.8.2 in /usr/local/lib/python3.12/dist-packages (from pandas) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in /usr/local/lib/python3.12/dist-packages (from pandas) (2025.2)
+Requirement already satisfied: tzdata>=2022.7 in /usr/local/lib/python3.12/dist-packages (from pandas) (2025.2)
+Requirement already satisfied: soupsieve>1.2 in /usr/local/lib/python3.12/dist-packages (from beautifulsoup4) (2.8)
+Requirement already satisfied: typing-extensions>=4.0.0 in /usr/local/lib/python3.12/dist-packages (from beautifulsoup4) (4.15.0)
+Requirement already satisfied: six>=1.5 in /usr/local/lib/python3.12/dist-packages (from python-dateutil>=2.8.2->pandas) (1.17.0)
 
 
-async def close_possible_popups(page):
-    """
-    Пробуем закрыть типичные всплывающие окна на WB:
-    куки/регион/уведомления и т.п.
-    """
-    candidates = [
-        "Понятно",
-        "Хорошо",
-        "Принять",
-        "Принять и продолжить",
-        "Да, всё верно",
-        "Согласен",
-    ]
-    for text in candidates:
-        try:
-            btn = page.get_by_role("button", name=text)
-            await btn.click(timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
-
-    # Иногда вместо кнопок есть просто крестик
-    for selector in [
-        "button[aria-label='Закрыть']",
-        ".c-btn--close",
-        ".popup__close",
-    ]:
-        try:
-            await page.click(selector, timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
 
 
-# ============================================================
-# 3. Основная асинхронная функция
-# ============================================================
-async def main():
-    all_products = []
+---------------------------------------------------------------------------
+TimeoutError                              Traceback (most recent call last)
+/tmp/ipython-input-438185201.py in <cell line: 1>()
+    202 # 4. Запуск
+    203 # ============================================================
+--> 204 await main()
 
-    async with async_playwright() as p:
-        # ---- 3.1. Запуск "фейкового" браузера ----
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = await context.new_page()
+6 frames
+/usr/local/lib/python3.12/dist-packages/playwright/_impl/_connection.py in wrap_api_call(self, cb, is_internal, title)
+    557             return await cb()
+    558         except Exception as error:
+--> 559             raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+    560         finally:
+    561             self._api_zone.set(None)
 
-        # ---- 3.2. Открываем главную страницу Wildberries ----
-        await page.goto("https://www.wildberries.ru/", wait_until="networkidle")
-        await page.wait_for_timeout(3000)
-        await close_possible_popups(page)
-
-        # ---- 3.3. Поиск "Елка" ----
-        search = page.locator("#searchInput")
-        await search.fill("Елка")
-        await search.press("Enter")
-
-        await page.wait_for_load_state("networkidle")
-        await page.wait_for_timeout(3000)
-
-        base_search_url = page.url
-        print("URL после поиска:", base_search_url)
-
-        # ---- 3.4. Обходим первые 5 страниц ----
-        for page_num in range(1, 6):
-            url_with_page = build_url_with_page(base_search_url, page_num)
-            print(f"\n>>> Загружаем страницу {page_num}: {url_with_page}")
-            await page.goto(url_with_page, wait_until="networkidle")
-            await page.wait_for_timeout(3000)
-
-            products = await extract_products_from_page(page)
-            print(f"Найдено товаров на странице {page_num}: {len(products)}")
-
-            for prod in products:
-                prod["page"] = page_num
-            all_products.extend(products)
-
-        await browser.close()
-
-    # ========================================================
-    # 4. Сбор данных в DataFrame и сохранение в CSV
-    # ========================================================
-    if not all_products:
-        print("Не удалось собрать товары. Проверь селекторы или сайт.")
-        return
-
-    df = pd.DataFrame(all_products)
-    df = df.rename(columns={
-        "title": "Название",
-        "priceText": "Цена",
-        "url": "Ссылка",
-        "page": "Страница"
-    })
-
-    df["Цена_число"] = df["Цена"].apply(parse_price_to_int)
-    df = df.dropna(subset=["Цена_число"])
-
-    csv_filename = "wildberries_elki.csv"
-    df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
-    print(f"\nДанные сохранены в файл: {csv_filename}")
-    print(f"Всего строк (товаров): {len(df)}")
-
-    # ========================================================
-    # 5. Самая дешёвая и самая дорогая ёлка
-    # ========================================================
-    if not df.empty:
-        cheapest = df.loc[df["Цена_число"].idxmin()]
-        most_expensive = df.loc[df["Цена_число"].idxmax()]
-
-        print("\n=== Самая дешёвая ёлка ===")
-        print("Название :", cheapest["Название"])
-        print("Цена     :", cheapest["Цена"])
-        print("Ссылка   :", cheapest["Ссылка"])
-
-        print("\n=== Самая дорогая ёлка ===")
-        print("Название :", most_expensive["Название"])
-        print("Цена     :", most_expensive["Цена"])
-        print("Ссылка   :", most_expensive["Ссылка"])
-    else:
-        print("После фильтрации по цене подходящих товаров не осталось.")
-
-
-# ============================================================
-# 4. Запуск
-# ============================================================
-await main()
+TimeoutError: Locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("#searchInput")
