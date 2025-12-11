@@ -1,219 +1,29 @@
-# ============================================================
-# 0. Системные библиотеки + Python-библиотеки
-# ============================================================
+📌📌📌📌1⃣1️⃣Selenium + playwright
 
-!apt-get update
-!apt-get install -y \
-    libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
-    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 \
-    libasound2 libpangocairo-1.0-0 libnss3 libxshmfence1 \
-    fonts-liberation libwayland-client0 libwayland-server0 \
-    libappindicator3-1 libdbusmenu-glib4 libdbusmenu-gtk3-4 \
-    libxtst6 libxss1 libx11-xcb1 librsvg2-common
+лекция и семинар
 
-!pip install playwright nest_asyncio pandas beautifulsoup4
-!playwright install chromium
+📁📁📁📁
+1️⃣ Взять сайт https://www.wildberries.ru/ и подключиться к нему через Selenium/playwright (рекомендую второй)
+2️⃣ (3 балла) У вас, скорее всего, сразу не получится и вам нужно будет использовать фейковый браузер (как пример, ниже). А еще побороться со всплывающим окошком (тут поможет задержка на пару секунд)
+import undetected_chromedriver as uc
+from selenium_stealth import stealth
 
+driver = uc.Chrome(version_main=142)
+stealth(driver,
+    languages=["ru-RU", "ru"],
+    vendor="Google Inc.",
+    platform="Linux",
+    webgl_vendor="Intel Inc.",
+    renderer="Intel Iris OpenGL Engine",
+    fix_hairline=True,
+)
+3️⃣ (2 балла) После этого, надо будет программно в поисковую строку вбить Елка. Скачать карточки товаров елки.
+4️⃣ (2 балла) После этого, собрать все елки, их цены, и ссылки на карточки с первых пяти страниц
+5️⃣ (2 балла) Записать в таблицу pandas и сохранить в csv.
+6️⃣ (1 балла) Найти самую дешевую и самую дорогую елку.
 
+Сдавать ipynb-файл. Форма сдачи
 
-# ============================================================
-# 1. Импорты и базовая настройка
-# ============================================================
-import asyncio
-import nest_asyncio
-from playwright.async_api import async_playwright
-import pandas as pd
+ИИ можно использовать, как обычно отчет нужен о его использовании.
 
-nest_asyncio.apply()  # чтобы можно было использовать await в Jupyter
-
-
-# ============================================================
-# 2. Вспомогательные функции
-# ============================================================
-def parse_price_to_int(price_text: str):
-    """
-    Переводим цену вида '1 899 ₽' в int 1899.
-    Если цены нет — возвращаем None.
-    """
-    if not price_text:
-        return None
-    digits = "".join(ch for ch in price_text if ch.isdigit())
-    return int(digits) if digits else None
-
-
-async def extract_products_from_page(page):
-    """
-    Достаём товары с текущей страницы WB.
-    Берём все div.product-card (типичная разметка WB),
-    внутри вытаскиваем название, цену и ссылку.
-    """
-    products = await page.eval_on_selector_all(
-        "div.product-card, div.j-card-item, div.product-card__wrapper",
-        """
-        (cards) => cards
-          .map(card => {
-            // ссылка
-            const link = card.querySelector(
-              'a.product-card__link, a.ref_goods_n_p, a.j-card-link, a.j-open-full-product-card'
-            );
-            const url = link ? link.href : '';
-
-            // название
-            const titleNode = card.querySelector(
-              'span.product-card__name, span.goods-name, span.goods-name.c-text-sm'
-            );
-            const title = titleNode
-              ? titleNode.textContent.trim()
-              : (link && (link.getAttribute('aria-label') || '')).trim();
-
-            // цена
-            const priceNode = card.querySelector(
-              '.price__lower-price, ins.lower-price, span.lower-price, p.price'
-            );
-            const priceText = priceNode
-              ? priceNode.textContent.replace(/[\\s\\u00A0]+/g, ' ').trim()
-              : '';
-
-            return { title, priceText, url };
-          })
-          .filter(p => p.title && p.url && p.priceText);
-        """
-    )
-    return products
-
-
-async def close_possible_popups(page):
-    """
-    Пробуем закрыть типичные всплывающие окна на WB:
-    куки/регион/уведомления и т.п.
-    """
-    candidates = [
-        "Понятно",
-        "Хорошо",
-        "Принять",
-        "Принять и продолжить",
-        "Да, всё верно",
-        "Согласен",
-    ]
-    for text in candidates:
-        try:
-            btn = page.get_by_role("button", name=text)
-            await btn.click(timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
-
-    # Иногда вместо кнопок есть просто крестик
-    for selector in [
-        "button[aria-label='Закрыть']",
-        ".c-btn--close",
-        ".popup__close",
-    ]:
-        try:
-            await page.click(selector, timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
-
-
-# ============================================================
-# 3. Основная асинхронная функция
-# ============================================================
-async def main():
-    all_products = []
-
-    async with async_playwright() as p:
-        # ---- 3.1. Запуск "фейкового" браузера ----
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = await context.new_page()
-
-        # Базовый URL поиска по запросу "елка"
-        base_url_template = (
-            "https://www.wildberries.ru/catalog/0/search.aspx"
-            "?search=%D0%B5%D0%BB%D0%BA%D0%B0&page={page}"
-        )
-
-        # ---- 3.2. Обходим первые 5 страниц ----
-        for page_num in range(1, 6):
-            url = base_url_template.format(page=page_num)
-            print(f"\n>>> Загружаем страницу {page_num}: {url}")
-            await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_timeout(4000)
-            await close_possible_popups(page)
-
-            # ждём, пока появятся карточки товаров (если они есть)
-            try:
-                await page.wait_for_selector(
-                    "div.product-card, div.j-card-item, div.product-card__wrapper",
-                    timeout=10000
-                )
-            except Exception:
-                print(f"⚠ На странице {page_num} не дождались карточек товаров по селектору.")
-            
-            products = await extract_products_from_page(page)
-            print(f"Найдено товаров на странице {page_num}: {len(products)}")
-
-            for prod in products:
-                prod["page"] = page_num
-            all_products.extend(products)
-
-        await browser.close()
-
-    # ========================================================
-    # 4. Сбор данных в DataFrame и сохранение в CSV
-    # ========================================================
-    if not all_products:
-        print("Не удалось собрать товары. Возможно, Wildberries отдал защитную страницу или изменилась разметка.")
-        return
-
-    df = pd.DataFrame(all_products)
-    df = df.rename(columns={
-        "title": "Название",
-        "priceText": "Цена",
-        "url": "Ссылка",
-        "page": "Страница"
-    })
-
-    df["Цена_число"] = df["Цена"].apply(parse_price_to_int)
-    df = df.dropna(subset=["Цена_число"])
-
-    csv_filename = "wildberries_elki.csv"
-    df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
-    print(f"\nДанные сохранены в файл: {csv_filename}")
-    print(f"Всего строк (товаров): {len(df)}")
-
-    # ========================================================
-    # 5. Самая дешёвая и самая дорогая ёлка
-    # ========================================================
-    if not df.empty:
-        cheapest = df.loc[df["Цена_число"].idxmin()]
-        most_expensive = df.loc[df["Цена_число"].idxmax()]
-
-        print("\n=== Самая дешёвая ёлка ===")
-        print("Название :", cheapest["Название"])
-        print("Цена     :", cheapest["Цена"])
-        print("Ссылка   :", cheapest["Ссылка"])
-
-        print("\n=== Самая дорогая ёлка ===")
-        print("Название :", most_expensive["Название"])
-        print("Цена     :", most_expensive["Цена"])
-        print("Ссылка   :", most_expensive["Ссылка"])
-    else:
-        print("После фильтрации по цене подходящих товаров не осталось.")
-
-
-# ============================================================
-# 4. Запуск
-# ============================================================
-await main()
+📅📅📅📅 14.12.25 23.59 мск
