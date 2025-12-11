@@ -1,22 +1,6 @@
-# ============================================================
-# 0. Системные библиотеки + Python-библиотеки
-# ============================================================
-
-!apt-get update
-!apt-get install -y \
-    libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 \
-    libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
-    libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 \
-    libasound2 libpangocairo-1.0-0 libnss3 libxshmfence1 \
-    fonts-liberation libwayland-client0 libwayland-server0 \
-    libappindicator3-1 libdbusmenu-glib4 libdbusmenu-gtk3-4 \
-    libxtst6 libxss1 libx11-xcb1 librsvg2-common
-
-!pip install playwright nest_asyncio pandas beautifulsoup4
-!playwright install chromium
-
-
-# ============================================================
+[7]
+20 сек.
+#=============================================
 # 1. Импорты и базовая настройка
 # ============================================================
 import asyncio
@@ -27,225 +11,124 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 nest_asyncio.apply()  # чтобы можно было использовать await в Jupyter
 
-
-# ============================================================
-# 2. Вспомогательные функции
-# ============================================================
-def build_url_with_page(base_url: str, page_number: int) -> str:
-    """
-    Берём URL после первого поиска и аккуратно добавляем/меняем параметр page.
-    Так сохраняются все остальные параметры (сортировка и т.п.).
-    """
-    parsed = urlparse(base_url)
-    qs = parse_qs(parsed.query)
-    qs["page"] = [str(page_number)]
-    new_query = urlencode(qs, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+❌ Не удалось найти строку поиска на Wildberries. Проверьте разметку сайта.
+Скриншот текущей страницы сохранён как wb_no_search.png
 
 
-def parse_price_to_int(price_text: str):
-    """
-    Переводим цену вида '1 899 ₽' в int 1899.
-    Если цены нет — возвращаем None.
-    """
-    if not price_text:
-        return None
-    digits = "".join(ch for ch in price_text if ch.isdigit())
-    return int(digits) if digits else None
+Вот роботс.ткст
+User-agent: Yandex
+Clean-param: group_cod_1s
+Allow: /*?page=
+Allow: /*detail.aspx*?wb_tp=
+Allow: /*detail.aspx*&wb_tp=
+Allow: /*detail.aspx*?wb_bnd=
+Allow: /*detail.aspx*&wb_bnd=
+Allow: /wbrands/brands/
+Allow: /catalog/tags/*
+Allow: /*utm_source=ymap&utm_medium=map
 
+Disallow: /*?*
+Disallow: /lk
+Disallow: /security
+Disallow: /cabinet/
+Disallow: /users/
+Disallow: /profile/
+Disallow: /sale/ 
+Disallow: /ScriptResource.axd
+Disallow: /axord/Modal/
+Disallow: /wildberries/templates/
+Disallow: /wildberries/JavaScripts/
+Disallow: /wildberries/services_page/
+Disallow: /fpage/js/
+Disallow: /*search.aspx*
+Disallow: /*brands.aspx
+Disallow: /*_about
+Disallow: /*ClientInfo.aspx
+Disallow: /%5C
+Disallow: /services/proverka-sovmestimosti
+Disallow: /services/sertifikaty
+Disallow: /services/feedback
+Disallow: /services/rss
+Disallow: /catalog/vybor-pokupateley/*
+Disallow: /gorod
+Disallow: /wbrands/
+Disallow: /recommendation/*
+Disallow: /recommendationssearch/*
+Disallow: /product/*
+Disallow: /eapteka
+Disallow: /catalog/*/otzyvy
 
-async def extract_products_from_page(page):
-    """
-    Достаём товары с текущей страницы WB.
-    Используем JS прямо в DOM: ищем карточки товаров как старого, так и нового форматов.
-    На выходе: список словарей {title, priceText, url}.
-    """
-    products = await page.eval_on_selector_all(
-        "article.product-card, div.dtList-inner",
-        """
-        (cards) => cards
-          .map(card => {
-            const link = card.querySelector('a.product-card__link, a.ref_goods_n_p, a.j-card-link, a.j-open-full-product-card');
-            const url = link ? link.href : '';
+User-agent: *
+Allow: /*?page=
+Allow: /*detail.aspx*?wb_tp=
+Allow: /*detail.aspx*&wb_tp=
+Allow: /*detail.aspx*?wb_bnd=
+Allow: /*detail.aspx*&wb_bnd=
+Allow: /wbrands/brands/
+Allow: /catalog/tags/*
+Allow: /*utm_source=ymap&utm_medium=map
+Disallow: /*?*
+Disallow: /lk
+Disallow: /security
+Disallow: /cabinet/
+Disallow: /users/
+Disallow: /profile/
+Disallow: /sale/ 
+Disallow: /ScriptResource.axd
+Disallow: /axord/Modal/
+Disallow: /wildberries/templates/
+Disallow: /wildberries/JavaScripts/
+Disallow: /wildberries/services_page/
+Disallow: /fpage/js/
+Disallow: /*search.aspx*
+Disallow: /*brands.aspx
+Disallow: /*_about
+Disallow: /*ClientInfo.aspx
+Disallow: /%5C
+Disallow: /services/proverka-sovmestimosti
+Disallow: /services/sertifikaty
+Disallow: /services/feedback
+Disallow: /services/rss
+Disallow: /catalog/vybor-pokupateley/*
+Disallow: /gorod
+Disallow: /wbrands/
+Disallow: /recommendation/*
+Disallow: /recommendationssearch/*
+Disallow: /eapteka
+Disallow: /catalog/*/otzyvy
 
-            const titleNode = card.querySelector('span.goods-name, span.goods-name.c-text-sm, span.product-card__name');
-            const title = titleNode
-              ? titleNode.textContent.trim()
-              : (link && (link.getAttribute('aria-label') || '')).trim();
+User-Agent: DISCo Pump
+Disallow: /
 
-            const priceNode = card.querySelector('.price__lower-price, ins.lower-price, span.lower-price');
-            const priceText = priceNode
-              ? priceNode.textContent.replace(/[\\s\\u00A0]+/g, ' ').trim()
-              : '';
+User-Agent: Wget
+Disallow: /
 
-            return { title, priceText, url };
-          })
-          .filter(p => p.title && p.url && p.priceText);
-        """
-    )
-    return products
+User-Agent: WebZIP
+Disallow: /
 
+User-Agent: Teleport Pro
+Disallow: /
 
-async def close_possible_popups(page):
-    """
-    Пробуем закрыть типичные всплывающие окна на WB:
-    куки/регион/уведомления и т.п.
-    """
-    candidates = [
-        "Понятно",
-        "Хорошо",
-        "Принять",
-        "Принять и продолжить",
-        "Да, всё верно",
-        "Согласен",
-    ]
-    for text in candidates:
-        try:
-            btn = page.get_by_role("button", name=text)
-            await btn.click(timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
+User-Agent: WebSnake
+Disallow: /
 
-    # Иногда вместо кнопок есть просто крестик
-    for selector in [
-        "button[aria-label='Закрыть']",
-        ".c-btn--close",
-        ".popup__close",
-    ]:
-        try:
-            await page.click(selector, timeout=1500)
-            await page.wait_for_timeout(500)
-            break
-        except Exception:
-            continue
+User-Agent: Offline Explorer
+Disallow: /
 
+User-Agent: Web-By-Mail
+Disallow: /
 
-# ============================================================
-# 3. Основная асинхронная функция
-# ============================================================
-async def main():
-    all_products = []
+User-agent: psbot
+Disallow: /
 
-    async with async_playwright() as p:
-        # ---- 3.1. Запуск "фейкового" браузера ----
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1920, "height": 1080},
-        )
-        page = await context.new_page()
+User-agent: gigabot
+Disallow: /
 
-        # ---- 3.2. Открываем главную страницу Wildberries ----
-        await page.goto("https://www.wildberries.ru/", wait_until="domcontentloaded")
-        await page.wait_for_timeout(5000)  # даём странице прогрузиться
-        await close_possible_popups(page)
+User-agent: Twiceler
+Disallow: /
 
-        # ---- 3.3. Ищем строку поиска разными способами ----
-        search = None
-        search_selectors = [
-            "#searchInput",                               # старый вариант
-            "input[data-wba-header-search-input]",        # новый вариант WB
-            "input[placeholder*='Поиск']",
-            "input[placeholder*='поиск']",
-            "input[aria-label*='Поиск']",
-        ]
+User-agent: NetinfoBot
+Disallow: /
 
-        for css in search_selectors:
-            try:
-                loc = page.locator(css)
-                if await loc.count() > 0:
-                    search = loc.first
-                    print("Используем селектор для поиска:", css)
-                    break
-            except Exception:
-                continue
-
-        if search is None:
-            print("❌ Не удалось найти строку поиска на Wildberries. Проверьте разметку сайта.")
-            try:
-                await page.screenshot(path="wb_no_search.png", full_page=True)
-                print("Скриншот текущей страницы сохранён как wb_no_search.png")
-            except Exception:
-                pass
-            await browser.close()
-            return
-
-        # ---- 3.4. Поиск "Елка" ----
-        await search.fill("Елка")
-        await search.press("Enter")
-
-        await page.wait_for_load_state("networkidle")
-        await page.wait_for_timeout(4000)
-
-        base_search_url = page.url
-        print("URL после поиска:", base_search_url)
-
-        # ---- 3.5. Обходим первые 5 страниц ----
-        for page_num in range(1, 6):
-            url_with_page = build_url_with_page(base_search_url, page_num)
-            print(f"\n>>> Загружаем страницу {page_num}: {url_with_page}")
-            await page.goto(url_with_page, wait_until="networkidle")
-            await page.wait_for_timeout(3000)
-
-            products = await extract_products_from_page(page)
-            print(f"Найдено товаров на странице {page_num}: {len(products)}")
-
-            for prod in products:
-                prod["page"] = page_num
-            all_products.extend(products)
-
-        await browser.close()
-
-    # ========================================================
-    # 4. Сбор данных в DataFrame и сохранение в CSV
-    # ========================================================
-    if not all_products:
-        print("Не удалось собрать товары. Проверь селекторы или сайт.")
-        return
-
-    df = pd.DataFrame(all_products)
-    df = df.rename(columns={
-        "title": "Название",
-        "priceText": "Цена",
-        "url": "Ссылка",
-        "page": "Страница"
-    })
-
-    df["Цена_число"] = df["Цена"].apply(parse_price_to_int)
-    df = df.dropna(subset=["Цена_число"])
-
-    csv_filename = "wildberries_elki.csv"
-    df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
-    print(f"\nДанные сохранены в файл: {csv_filename}")
-    print(f"Всего строк (товаров): {len(df)}")
-
-    # ========================================================
-    # 5. Самая дешёвая и самая дорогая ёлка
-    # ========================================================
-    if not df.empty:
-        cheapest = df.loc[df["Цена_число"].idxmin()]
-        most_expensive = df.loc[df["Цена_число"].idxmax()]
-
-        print("\n=== Самая дешёвая ёлка ===")
-        print("Название :", cheapest["Название"])
-        print("Цена     :", cheapest["Цена"])
-        print("Ссылка   :", cheapest["Ссылка"])
-
-        print("\n=== Самая дорогая ёлка ===")
-        print("Название :", most_expensive["Название"])
-        print("Цена     :", most_expensive["Цена"])
-        print("Ссылка   :", most_expensive["Ссылка"])
-    else:
-        print("После фильтрации по цене подходящих товаров не осталось.")
-
-
-# ============================================================
-# 4. Запуск
-# ============================================================
-await main()
+User-agent: ia_archiver
+Disallow: /
