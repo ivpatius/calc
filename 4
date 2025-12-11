@@ -27,3 +27,408 @@ stealth(driver,
 ИИ можно использовать, как обычно отчет нужен о его использовании.
 
 📅📅📅📅 14.12.25 23.59 мск
+
+
+# Python для анализа данных
+
+
+Посмотрим на примеры использования `selenium`.
+
+**Пример.** Зайдем на сайт книжного магазина и найдем все книги про Python. Загрузим библиотеку, веб-драйвер и откроем страницу в браузере через Python.
+
+!pip install google-colab-selenium
+
+import google_colab_selenium as gs
+
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
+from time import sleep
+import pandas as pd
+from selenium.webdriver.chrome.service import Service
+
+driver = gs.Chrome()
+
+!pip install undetected_chromedriver
+!pip install selenium_stealth
+
+import undetected_chromedriver as uc
+from selenium_stealth import stealth
+
+driver = gs.Chrome()
+stealth(driver
+    languages=["ru-RU", "ru"],
+    vendor="Google Inc.",
+    platform="Linux",
+    webgl_vendor="Intel Inc.",
+    renderer="Intel Iris OpenGL Engine",
+    fix_hairline=True,
+)
+driver.get("https://www.wildberries.ru/")
+
+print(driver.current_url)
+
+
+
+driver.get("https://python.org")
+print(driver.current_url)
+
+driver.find_element(By.XPATH, "/html/body/div/div[2]/nav/ul/li[3]/a").click()
+
+search_line = driver.find_element(By.NAME, "q")
+search_line.clear()
+search_line.send_keys("for")
+search_line.send_keys(Keys.ENTER)
+
+print(driver.current_url)
+
+print(driver.page_source)
+
+driver.find_element("css selector","#id-search-field")
+
+from selenium.webdriver.common.by import By
+
+driver.find_element(By.XPATH,"/html/body/div/header/div/div[1]/div/form/fieldset/input")
+
+search_line = driver.find_element(By.ID, "id-search-field")
+
+# отправить в search_line selenium -- send_keys
+search = "selenium"
+driver.implicitly_wait(2)
+search_line.send_keys(search)
+driver.implicitly_wait(2)  # подождем пару секунд
+
+button = driver.find_element(By.XPATH, "/html/body/div/header/div/div[1]/div/form/fieldset/button")
+
+button.text
+
+button.get_attribute("class")
+
+button.click()
+
+driver.current_url
+
+
+
+driver.get('http://www.biblio-globus.ru/')
+field = driver.find_element("css selector","#SearchBooks")
+
+author = "Python"
+driver.implicitly_wait(2)
+field.send_keys(author)
+driver.implicitly_wait(2)  # подождем пару секунд
+
+submit = driver.find_element("css selector","#SearchButton")
+submit.click()
+
+next = driver.find_element(By.XPATH, '/html/body/div[7]/div[1]/div/div/div[2]/div[2]/ul/li[2]/a')
+next.click()
+
+
+page2 = driver.page_source
+
+soup2 = BeautifulSoup(page2, 'html')
+
+books = soup2.find_all('div', class_='col-lg-3 col-md-4 col-sm-6 col-6 wrp_mobile')
+
+books_data = []
+
+for card in books:
+
+    title_tag = card.find('img', class_='card-img')
+    title = title_tag.get('alt', '')
+
+    author_tag = card.find('span', class_='card-author')
+    author = author_tag.text.strip()
+
+    price_tag = card.find('span', class_='price_item_new')
+    price = price_tag.text.strip().replace('\xa0', ' ')
+
+    books_data.append({
+            'Название': title,
+            'Автор': author,
+            'Цена': price})
+
+df = pd.DataFrame(books_data)
+
+df.head()
+
+
+
+driver.get('http://www.biblio-globus.ru/')
+field = driver.find_element("css selector","#SearchBooks")
+author = "Python"
+driver.implicitly_wait(2)
+field.send_keys(author)
+driver.implicitly_wait(2)
+
+submit = driver.find_element("css selector","#SearchButton")
+submit.click()
+page1 = driver.page_source
+
+from bs4 import BeautifulSoup
+soup1 = BeautifulSoup(page1, "html")
+books = soup1.find_all('div', class_='col-lg-3 col-md-4 col-sm-6 col-6 wrp_mobile')
+books_info = []
+for b in books:
+  title_b = b.find('img',class_= 'card-img')
+  title = title_b.get('alt','')
+  author_b = b.find('span', class_='card-author')
+  author = author_b.text.strip()
+  price_b = b.find('span', class_='price_item_new')
+  price = price_b.text.strip()
+  books_info.append({
+    'Название':title,
+    'Автор':author,
+    'Цена':price
+})
+df = pd.DataFrame(books_info)
+df.head()
+
+driver.execute_script("...")
+
+driver.find_elements("css selector","#SearchBooks")
+
+from selenium.webdriver.common.by import By
+
+driver.find_element(By.XPATH,"/html/body/header/div[2]/div[2]/div[2]/div/div/div/div[2]/form/div/div[3]/button")
+
+Найдем с помощью CSS Selector'а (*SelectorGadget*) поле для ввода названия книги или автора.
+
+field = driver.find_element("css selector","#SearchBooks")
+
+field
+
+Сохраним запрос:
+
+author = "Python"  # переменная author - условность
+
+Введем запрос в поле для поиска (`.send_keys`) и подождем чуть-чуть:
+
+driver.implicitly_wait(2)
+field.send_keys(author)
+driver.implicitly_wait(2)  # подождем пару секунд
+
+Теперь найдем кнопку для поиска (значок *лупа* рядом со строкой поиска) :
+
+#SearchButton
+
+submit = driver.find_element("css selector","#SearchButton")
+
+submit
+
+Кликнем на нее:
+
+submit.click()
+
+Сохраним первую страницу с результатами в переменную `page1`.
+
+page1 = driver.page_source
+
+page1
+
+Теперь обработаем эту страницу через `BeautifulSoup`:
+
+from bs4 import BeautifulSoup
+
+soup1 = BeautifulSoup(page1, 'html')
+
+soup1
+
+Найдем все названия книг на этой странице. По исходному коду можно увидеть, что они имеют тэг `a` с атрибутом `class`, равным `name`:
+
+print(soup1.prettify())
+
+soup1.find_all('a',{'class':"img-wrapper-index"})
+
+С помощью списковых включений выберем из ссылок с тэгом `<a>` текст (так мы уже делали, и не раз).
+
+result = soup1.find_all('a',{'class':"img-wrapper-index"})[0]
+result
+
+result.find_all('img')
+
+
+
+## Задание
+
+Получить такой список книг
+
+import pandas as pd
+
+Для разнообразия создадим датафрейм не из списка списков, а из словаря. Ключами словаря будут названия столбцов в таблице, а значениями – списки с сохраненной информацией (названия книг, цены и проч.).
+
+df = pd.DataFrame(books_parsed)
+
+df.head()
+
+df.columns = ['Автор', 'Название', 'Цена']
+
+df['Цена'] = pd.to_numeric(df['Цена'])
+
+df.info()
+
+Теперь можем расположить книги по цене в порядке возрастания:
+
+df = df.sort_values('Автор')
+
+df = df.reset_index(drop=True)
+
+df
+
+И сохраним всю таблицу в csv-файл:
+
+df.to_csv("books.csv")
+
+## Задание
+
+Соберите таблицу с ФИО автора, названием книги и ее стоимостью со всех страниц по запросу "Python".
+
+l = []
+try:
+    while True:
+        next_page_btn = driver.find_element("css selector",".active + .page-item")
+        sleep(2)
+        soup1 = BeautifulSoup(page1, 'html')
+        l.extend(soup1.find_all('a',{'class':"img-wrapper-index"}))
+        sleep(2)
+        next_page_btn.click()
+except:
+    print('Finished!')
+
+l
+
+!pip install playwright
+!playwright install
+
+!playwright install chromium
+!playwright install firefox
+!playwright install webkit
+
+!apt-get update
+!apt-get install -y libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libxcomposite1 libxdamage1 \
+    libxfixes3 libxrandr2 libgbm1 libxkbcommon0 libpango-1.0-0 libcairo2 \
+    libasound2 libpangocairo-1.0-0 libnss3 libxshmfence1 fonts-liberation \
+    libwayland-client0 libwayland-server0 libappindicator3-1 libdbusmenu-glib4 \
+    libdbusmenu-gtk3-4 libxtst6 libxss1 libx11-xcb1
+
+
+!pip install playwright nest_asyncio
+!playwright install chromium
+
+
+import asyncio
+import nest_asyncio
+from playwright.async_api import async_playwright
+
+nest_asyncio.apply()
+
+async def run():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        await page.goto("https://example.com")
+        print(await page.title())
+
+        await browser.close()
+
+await run()
+
+import asyncio
+import nest_asyncio
+from playwright.async_api import async_playwright
+from bs4 import BeautifulSoup
+import pandas as pd
+
+nest_asyncio.apply()
+async def run():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto("http://www.biblio-globus.ru/")
+        # print(await page.title())
+        search = page.locator('input[placeholder="Поиск..."]').first
+        await search.fill("Python")
+        await search.press("Enter")
+        await page.wait_for_load_state("networkidle")
+
+        html = await page.content()
+        soup = BeautifulSoup(html, "html.parser")
+        books = soup.find_all("div", class_="col-lg-3 col-md-4 col-sm-6 col-6 wrp_mobile")
+
+        books_info = []
+        for b in books:
+            img = b.find("img", class_="card-img")
+            title = img.get("alt", "")
+            author_b = b.find('span', class_='card-author')
+            author = author_b.text.strip()
+            price_b = b.find('span', class_='price_item_new')
+            price = price_b.text.strip()
+            books_info.append({
+              'Название':title,
+              'Автор':author,
+              'Цена':price
+            })
+        df = pd.DataFrame(books_info)
+        print(df.head())
+        await browser.close()
+await run()
+
+!pip install fake_useragent
+
+from fake_useragent import UserAgent
+
+ua = UserAgent()
+
+import asyncio
+import nest_asyncio
+from playwright.async_api import async_playwright
+
+
+async def run():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        # browser = await p.chromium.launch(headless=True)
+        # context = browser.new_context(
+        #     user_agent=ua.random,
+        #     viewport={'width': 1920, 'height': 1080}
+        # )
+        # page = context.new_page()
+
+        await page.goto("https://www.biblio-globus.ru/")
+        await page.screenshot(path="page.png")
+        print(await page.title())
+        search = page.locator('input[placeholder="Поиск..."]').first
+        await search.fill('Python')
+        await search.press("Enter")
+        await page.wait_for_load_state("networkidle")
+        html = await page.content()
+        print(html)
+        soup = BeautifulSoup(html, "html.parser")
+        books = soup.find_all("div", class_="col-lg-3 col-md-4 col-sm-6 col-6 wrp_mobile")
+
+        books_info = []
+        for b in books:
+            img = b.find("img", class_="card-img")
+            title = img.get("alt", "")
+            author_b = b.find('span', class_='card-author')
+            author = author_b.text.strip()
+            price_b = b.find('span', class_='price_item_new')
+            price = price_b.text.strip()
+            books_info.append({
+              'Название':title,
+              'Автор':author,
+              'Цена':price
+            })
+        df = pd.DataFrame(books_info)
+        print(df.head())
+        await browser.close()
+
+await run()
+
+# fill(), press(), click(), type(), check(), select_option()
+
