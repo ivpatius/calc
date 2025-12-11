@@ -1,294 +1,221 @@
-import requests
+# ============================================================
+# 0. Установка библиотек (запусти ОДИН раз в окружении)
+# ============================================================
+!pip install playwright nest_asyncio pandas beautifulsoup4
+!playwright install chromium
+
+
+# ============================================================
+# 1. Импорты и базовая настройка
+# ============================================================
+import asyncio
+import nest_asyncio
+from playwright.async_api import async_playwright
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
 
-# сначала получаем данные о ценах и популярности с market.csgo.com
-MARKET_URL = "https://market.csgo.com/api/v2/prices/class_instance/RUB.json" # Это один из самых крупных сайтов по продаже скинов 
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
-resp_market = requests.get(MARKET_URL)
-resp_market.raise_for_status()
-market_json = resp_market.json()
-market_items = market_json["items"]
+nest_asyncio.apply()  # чтобы можно было использовать await в Jupyter
 
-market_rows = []
 
-def to_float(x): # пытаемся перевести в float, так как может быть беда беда
-    try:
-        return float(x)
-    except (TypeError, ValueError):
+# ============================================================
+# 2. Вспомогательные функции
+# ============================================================
+def build_url_with_page(base_url: str, page_number: int) -> str:
+    """
+    Берём URL после первого поиска и аккуратно добавляем/меняем параметр page.
+    Так сохраняются все остальные параметры (сортировка и т.п.).
+    """
+    parsed = urlparse(base_url)
+    qs = parse_qs(parsed.query)
+    qs["page"] = [str(page_number)]
+    new_query = urlencode(qs, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
+
+
+def parse_price_to_int(price_text: str):
+    """
+    Переводим цену вида '1 899 ₽' в int 1899.
+    Если цены нет — возвращаем None.
+    """
+    if not price_text:
         return None
+    digits = "".join(ch for ch in price_text if ch.isdigit())
+    return int(digits) if digits else None
 
-def to_int(x): # тут то же самое
-    try:
-        return int(x)
-    except (TypeError, ValueError):
-        return None
 
-for j, item in market_items.items():
-    name = item.get("market_hash_name")
-    if not name:
-        continue
+async def extract_products_from_page(page):
+    """
+    Достаём товары с текущей страницы WB.
+    Используем JS прямо в DOM: ищем карточки товаров как старого, так и нового форматов.
+    На выходе: список словарей {title, priceText, url}.
+    """
+    products = await page.eval_on_selector_all(
+        "article.product-card, div.dtList-inner",
+        """
+        (cards) => cards
+          .map(card => {
+            const link = card.querySelector('a.product-card__link, a.ref_goods_n_p, a.j-card-link, a.j-open-full-product-card');
+            const url = link ? link.href : '';
 
-    market_rows.append(
-        {"market_hash_name": name,
-         "market_price_rub": to_float(item.get("price")),
-          "market_avg_price_rub": to_float(item.get("avg_price")),
-          "market_buy_order_rub": to_float(item.get("buy_order")),
-          "market_popularity_7d": to_int(item.get("popularity_7d")),
-          "market_ru_rarity": item.get("ru_rarity"),
-          "market_ru_quality": item.get("ru_quality")
-        }
+            const titleNode = card.querySelector('span.goods-name, span.goods-name.c-text-sm, span.product-card__name');
+            const title = titleNode
+              ? titleNode.textContent.trim()
+              : (link && (link.getAttribute('aria-label') || '')).trim();
+
+            const priceNode = card.querySelector('.price__lower-price, ins.lower-price, span.lower-price');
+            const priceText = priceNode
+              ? priceNode.textContent.replace(/[\\s\\u00A0]+/g, ' ').trim()
+              : '';
+
+            return { title, priceText, url };
+          })
+          .filter(p => p.title && p.url && p.priceText);
+        """
     )
-
-df_market = pd.DataFrame(market_rows) # Первая половина есть, но нам мало колонок
-
-# тянем доп инфу по скинам с кс го апи, чтобы прибавить инфы для анализа 
-SKINS_URL = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins_not_grouped.json"
-
-resp_skins = requests.get(SKINS_URL)
-resp_skins.raise_for_status()
-skins_json = resp_skins.json()
-
-skins_rows = []
-
-for skin in skins_json:
-    name = skin.get("market_hash_name")
-    if not name:
-        continue
-
-    weapon = skin.get("weapon") or {}
-    pattern = skin.get("pattern") or {}
-
-    skins_rows.append(
-        {
-            "market_hash_name": name,
-            "weapon_name": weapon.get("name"),
-            "float_min": skin.get("min_float"),
-            "float_max": skin.get("max_float"),
-            "pattern_name": pattern.get("name"),
-            "is_stattrak": bool(skin.get("stattrak")),
-            "is_souvenir": bool(skin.get("souvenir")),
-        }
-    )
-
-df_skins = pd.DataFrame(skins_rows)
-
-# объединяем две таблицы по market_hash_name и убираем пропуски
-# это надо для того чтобы работать с фулл заполненой таблицей со всеми крутыми ячейками
-df_full = df_market.merge(df_skins, on="market_hash_name", how="inner")
-df_full = df_full.replace("", pd.NA)
-df_clean = df_full.dropna(how="any")
+    return products
 
 
-# сортировка: сначала описание предмета, затем характеристики, потом цены/популярность
-cols_order = [
-    "market_hash_name",
-    "weapon_name",
-    "pattern_name",
-    "is_stattrak",
-    "is_souvenir",
-    "market_ru_rarity",
-    "market_ru_quality",
-    "float_min",
-    "float_max",
-    "market_price_rub",
-    "market_avg_price_rub",
-    "market_buy_order_rub",
-    "market_popularity_7d",
-]
+async def close_possible_popups(page):
+    """
+    Пробуем закрыть типичные всплывающие окна на WB:
+    куки/регион/уведомления и т.п.
+    Просто перебираем популярные тексты кнопок.
+    Если ничего не нашли — молча продолжаем.
+    """
+    candidates = [
+        "Понятно",
+        "Хорошо",
+        "Принять",
+        "Принять и продолжить",
+        "Да, всё верно",
+        "Согласен",
+    ]
+    for text in candidates:
+        try:
+            btn = page.get_by_role("button", name=text)
+            await btn.click(timeout=1500)
+            # Небольшая задержка после клика
+            await page.wait_for_timeout(500)
+            break
+        except Exception:
+            continue
 
-df_clean = df_clean[cols_order]
-
-# сохраняем итоговую таблицу 
-df_clean.to_csv("cs2_items.csv", index=False, encoding="utf-8-sig")
-
-# для анализа дальше используем копию этой таблицы
-df = df_clean.copy()
-
-
-df["spread_price_buy"] = df["market_price_rub"] - df["market_buy_order_rub"] # считаем спред цены
-avg = df["market_avg_price_rub"].replace(0, np.nan)
-df["price_to_avg_ratio"] = df["market_price_rub"] / avg # отношение текущей цены к средней
-
-
-# распределения по категориям и описательная статистика по числам.
-
-total_missing = int(df.isna().sum().sum())
-print("Общее количество пропусков:", total_missing)
-print("")
-dup_count = df.duplicated().sum() # тут убираем дубликаты они нам не нужны мы индивиды в этом бренном мире
-print("Полных дубликатов:", dup_count)
-print("")
-if dup_count > 0:
-    df = df.drop_duplicates()
-
-# тут дальше вроде все чисто и ясно как солнце и небо в летние деньки 
-
-print("Уникальных предметов:", df["market_hash_name"].nunique())
-print("")
-print("Уникальных видов оружия:  ", df["weapon_name"].nunique())
-print("")
-print("Распределение по редкости:")
-print("")
-print(df["market_ru_rarity"].value_counts())
-print("")
-print("Распределение по качеству:")
-print(df["market_ru_quality"].value_counts())
-print("")
-print("Доля статтрековских:", df["is_stattrak"].mean())
-print("")
-print("Доля сувенирных:", df["is_souvenir"].mean())
-print("")
-print("Описательная статистика по текущей цене:")
-print(df["market_price_rub"].describe())
-print("")
-print("Описательная статистика по популярности:")
-print(df["market_popularity_7d"].describe())
-print("")
-print("Описательная статистика по отношение текущей цены к средней:")
-print(df["price_to_avg_ratio"].describe())
-print("")
-
-# меняется ли средняя цена и популярность по редкости и качеству, набиваем крч говоря побольше характеристик
-mean_price_by_rarity = (df.groupby("market_ru_rarity")["market_price_rub"].mean().sort_values(ascending=False))
-print("Средняя цена по редкости:")
-print(mean_price_by_rarity)
-print("")
-
-# стата по редкости и популярности
-mean_pop_by_rarity = (df.groupby("market_ru_rarity")["market_popularity_7d"].mean().sort_values(ascending=False))
-print("Средняя популярность по редкости:")
-print(mean_pop_by_rarity)
-print("")
-
-# стата по качеству и цене
-mean_price_by_quality = (df.groupby("market_ru_quality")["market_price_rub"].mean().sort_values(ascending=False))
-print("Средняя цена по качеству:")
-print(mean_price_by_quality)
-print("")
-
-# корреляции между ценой, средней ценой, ценой на оредер покупки, популярностью, спреду
-corr_cols = ["market_price_rub",
-             "market_avg_price_rub",
-             "market_buy_order_rub",
-             "market_popularity_7d",
-             "spread_price_buy"]
-corr = df[corr_cols].corr()
-print("Корреляция числовых признаков:")
-print(corr)
-print("")
+    # Иногда вместо кнопок есть просто крестик
+    for selector in [
+        "button[aria-label='Закрыть']",
+        ".c-btn--close",
+        ".popup__close",
+    ]:
+        try:
+            await page.click(selector, timeout=1500)
+            await page.wait_for_timeout(500)
+            break
+        except Exception:
+            continue
 
 
+# ============================================================
+# 3. Основная асинхронная функция
+# ============================================================
+async def main():
+    all_products = []
 
-#Тут начианем клипать графики, сначала простые
-# гистограмма маркет прайса и кол-ва предметов 1
-plt.figure()
-df["market_price_rub"].hist(bins=50)
-plt.xlabel("Цена, руб.")
-plt.ylabel("Количество предметов")
-plt.title("Распределение цен предметов CS2")
-plt.yscale("log")
-plt.tight_layout()
-plt.show()
+    async with async_playwright() as p:
+        # ---- 3.1. Запуск "фейкового" браузера ----
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1920, "height": 1080},
+        )
+        page = await context.new_page()
 
-# гистограмма популярности и кол-ва предметов в обороте маркета 2
-plt.figure()
-df["market_popularity_7d"].hist(bins=50)
-plt.xlabel("Популярность за 7 дней")
-plt.ylabel("Количество предметов")
-plt.title("Распределение популярности предметов")
-plt.yscale("log")
-plt.tight_layout()
-plt.show()
+        # ---- 3.2. Открываем главную страницу Wildberries ----
+        await page.goto("https://www.wildberries.ru/", wait_until="networkidle")
+        await page.wait_for_timeout(3000)  # даём странице догрузиться
+        await close_possible_popups(page)
 
-# боксплот цены по редкости 3
-plt.figure()
-df.boxplot(column="market_price_rub", by="market_ru_rarity", rot=60)
-plt.ylabel("Цена, руб.")
-plt.title("Цена по редкости")
-plt.xlabel("")
-plt.suptitle("")
-plt.tight_layout()
-plt.show()
+        # ---- 3.3. Программно вводим 'Елка' в строку поиска и жмём Enter ----
+        search = page.locator("#searchInput")
+        await search.fill("Елка")
+        await search.press("Enter")
 
-# средняя цена по редкости 4
-plt.figure()
-mean_price_by_rarity.plot(kind="bar")
-plt.ylabel("Средняя цена, руб.")
-plt.title("Средняя цена по редкости")
-plt.xlabel("")
-plt.xticks(rotation=60)
-plt.tight_layout()
-plt.show()
+        # ждём загрузки результатов
+        await page.wait_for_load_state("networkidle")
+        await page.wait_for_timeout(3000)
 
-# Количество предметов по редкости 5
-plt.figure()
-df["market_ru_rarity"].value_counts().plot(kind="bar")
-plt.ylabel("Количество предметов")
-plt.title("Количество предметов по редкости")
-plt.xlabel("")
-plt.xticks(rotation=60)
-plt.tight_layout()
-plt.show()
+        # сохраняем URL выдачи (чтобы аккуратно строить ссылки на страницы 1–5)
+        base_search_url = page.url
+        print("URL после поиска:", base_search_url)
 
-# график цена и популярность
-plt.figure()
-plt.scatter(df["market_price_rub"], df["market_popularity_7d"])
-plt.xlabel("Цена, руб.")
-plt.ylabel("Популярность за 7 дней в пуле маркета")
-plt.title("Цена/популярность")
-plt.xscale("log")
-plt.yscale("log")
-plt.tight_layout()
-plt.show()
+        # ---- 3.4. Обходим первые 5 страниц выдачи ----
+        for page_num in range(1, 6):
+            url_with_page = build_url_with_page(base_search_url, page_num)
+            print(f"\n>>> Загружаем страницу {page_num}: {url_with_page}")
+            await page.goto(url_with_page, wait_until="networkidle")
+            await page.wait_for_timeout(3000)
 
-#  график текущая цена vs средняя цена
-plt.figure()
-plt.scatter(df["market_avg_price_rub"], df["market_price_rub"])
-plt.xlabel("Средняя цена, руб.")
-plt.ylabel("Текущая цена, руб.")
-plt.title("Текущая цена/средняя цена")
-plt.xscale("log")
-plt.yscale("log")
-plt.tight_layout()
-plt.show()
+            products = await extract_products_from_page(page)
+            print(f"Найдено товаров на странице {page_num}: {len(products)}")
 
-# доля статрек предметов топ 10 
-st_share_by_weapon = (
-    df.groupby("weapon_name")["is_stattrak"]
-    .mean()
-    .sort_values(ascending=False)
-    .head(10)
-)
-plt.figure()
-st_share_by_weapon.plot(kind="bar")
-plt.ylabel("Доля StatTrak")
-plt.title("Доля StatTrak предметов")
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+            # добавляем номер страницы в данные
+            for prod in products:
+                prod["page"] = page_num
+            all_products.extend(products)
 
-# 20 самых популярных предметов на маркете
-top_popular = df.sort_values("market_popularity_7d", ascending=False).head(20)
-plt.figure()
-plt.barh(top_popular["market_hash_name"], top_popular["market_popularity_7d"])
-plt.xlabel("Популярность за 7 дней")
-plt.title("20 сымых популярных предметов")
-plt.gca().invert_yaxis()
-plt.tight_layout()
-plt.show()
+        await browser.close()
 
-# тепловая карта корреляций которые мы до этого уже посчитали и вывели в прошлом пункте 
-plt.figure()
-plt.imshow(corr, interpolation="nearest")
-plt.xticks(range(len(corr)), corr.columns, rotation=90)
-plt.yticks(range(len(corr)), corr.columns)
-plt.colorbar()
-plt.title("Корреляции числовых признаков")
-plt.tight_layout()
-plt.show()
+    # ========================================================
+    # 4. Сбор данных в DataFrame и сохранение в CSV
+    # ========================================================
+    if not all_products:
+        print("Не удалось собрать товары. Проверь селекторы или сайт.")
+        return
+
+    df = pd.DataFrame(all_products)
+    # Переименуем столбцы под формулировку задания
+    df = df.rename(columns={
+        "title": "Название",
+        "priceText": "Цена",
+        "url": "Ссылка",
+        "page": "Страница"
+    })
+
+    # Числовая цена для анализа
+    df["Цена_число"] = df["Цена"].apply(parse_price_to_int)
+    df = df.dropna(subset=["Цена_число"])
+
+    # Сохраняем в CSV
+    csv_filename = "wildberries_elki.csv"
+    df.to_csv(csv_filename, index=False, encoding="utf-8-sig")
+    print(f"\nДанные сохранены в файл: {csv_filename}")
+    print(f"Всего строк (товаров): {len(df)}")
+
+    # ========================================================
+    # 5. Поиск самой дешёвой и самой дорогой ёлки
+    # ========================================================
+    if not df.empty:
+        cheapest = df.loc[df["Цена_число"].idxmin()]
+        most_expensive = df.loc[df["Цена_число"].idxmax()]
+
+        print("\n=== Самая дешёвая ёлка ===")
+        print("Название :", cheapest["Название"])
+        print("Цена     :", cheapest["Цена"])
+        print("Ссылка   :", cheapest["Ссылка"])
+
+        print("\n=== Самая дорогая ёлка ===")
+        print("Название :", most_expensive["Название"])
+        print("Цена     :", most_expensive["Цена"])
+        print("Ссылка   :", most_expensive["Ссылка"])
+    else:
+        print("После фильтрации по цене подходящих товаров не осталось.")
 
 
-
-
+# ============================================================
+# 6. Запуск
+# ============================================================
+await main()
