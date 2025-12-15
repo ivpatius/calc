@@ -1,5 +1,40 @@
-# Если запускаете в Colab / новом окружении, раскомментируйте эти строки:
-# !pip install selenium webdriver-manager bs4 pandas
+---------------------------------------------------------------------------
+SessionNotCreatedException                Traceback (most recent call last)
+/tmp/ipython-input-336912306.py in <cell line: 0>()
+     30 
+     31 service = Service(ChromeDriverManager().install())
+---> 32 driver = webdriver.Chrome(service=service, options=chrome_options)
+     33 
+     34 # убираем navigator.webdriver
+
+5 frames
+/usr/local/lib/python3.12/dist-packages/selenium/webdriver/remote/errorhandler.py in check_response(self, response)
+    230                 alert_text = value["alert"].get("text")
+    231             raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here
+--> 232         raise exception_class(message, screen, stacktrace)
+
+SessionNotCreatedException: Message: session not created: Chrome instance exited. Examine ChromeDriver verbose log to determine the cause.; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#sessionnotcreatedexception
+Stacktrace:
+#0 0x57cd77d7219a <unknown>
+#1 0x57cd777efc4b <unknown>
+#2 0x57cd77829d1d <unknown>
+#3 0x57cd778256d3 <unknown>
+#4 0x57cd7787524c <unknown>
+#5 0x57cd7787496c <unknown>
+#6 0x57cd77833c42 <unknown>
+#7 0x57cd778348f1 <unknown>
+#8 0x57cd77d3af39 <unknown>
+#9 0x57cd77d3de7d <unknown>
+#10 0x57cd77d23c81 <unknown>
+#11 0x57cd77d3ea5b <unknown>
+#12 0x57cd77d0aa50 <unknown>
+#13 0x57cd77d5faa8 <unknown>
+#14 0x57cd77d5fc79 <unknown>
+#15 0x57cd77d714f3 <unknown>
+#16 0x78bfa1cfdac3 <unknown>
+
+
+
 
 import time
 import re
@@ -190,3 +225,14 @@ print(cheapest)
 
 print("\nСамая дорогая ёлка:")
 print(most_expensive)
+
+
+
+!pip install selenium webdriver-manager bs4 pandas
+!apt-get update
+!apt-get install -y wget
+!wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+!apt-get install -y /tmp/chrome.deb
+!pip install webdriver-manager
+!pip install --upgrade selenium webdriver-manager
+!pip install chromedriver-autoinstaller
