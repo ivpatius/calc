@@ -1,201 +1,61 @@
-!pip install playwright nest_asyncio bs4 pandas
+Открыли страницу: https://www.wildberries.ru/
+Title: Почти готово...
+❌ Не нашёл поле поиска. Вот начало HTML страницы:
+<!DOCTYPE html><html data-theme="light"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta http-equiv="refresh" content="60"><link rel="icon" href="data:,"><script>window.LOAD_START=Date.now()</script><title>Почти готово...</title><script type="module" crossorigin="" src="/__wbaas/challenges/antibot/__static/v1/index-BqjVCqpX.js"></script><link rel="stylesheet" crossorigin="" href="/__wbaas/challenges/antibot/__static/v1/index-CmGukrMr.css"></head><body><div class="w"><div>
+              <div class="support">
+        <svg class="support-logo" width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M51.6852 75.9854C58.5299 73.4069 85.3546 60.5592 86.5418 17.243C86.5924 15.3976 85.6274 13.6535 84.0564 12.6782C63.271 -0.226077 36.9426 -0.226076 16.1572 12.6782C14.5862 13.6535 13.6212 15.3976 13.6718 17.243C14.859 60.5592 41.6837 73.4069 48.5284 75.9854C49.5503 76.3704 50.6633 76.3704 51.6852 75.9854Z" fill="url(#paint0_linear_9028_11756)"></path>
+          <g data-figma-bg-blur-radius="9.27278">
+            <path d="M13.9134 27.8499L10.6156 29.7302C8.72144 30.8101 7.53858 32.8483 7.61053 35.0238C9.16345 81.9803 41.4117 95.3443 48.6667 97.7616C49.6209 98.0795 50.594 98.0795 51.5481 97.7616C58.8031 95.3443 91.0514 81.9803 92.6043 35.0238C92.6763 32.8483 91.4934 30.8101 89.5993 29.7302L86.3014 27.8499C63.8738 15.0627 36.3411 15.0627 13.9134 27.8499Z" fill="url(#paint1_linear_9028_11756)" fill-opacity="0.5"></path>
+            <path d="M14.1611 28.2839C36.4352 15.5844 63.7797 15.5844 86.0537 28.2839L89.3516 30.1648C91.0908 31.1564 92.1701 33.0246 92.1045 35.0076C91.3321 58.3605 82.9327 73.3231 73.8545 82.7478C64.7663 92.1828 54.9712 96.0935 51.3896 97.2869C50.5382 97.5705 49.6766 97.5705 48.8252 97.2869C45.2437 96.0935 35.4485 92.1828 26.3604 82.7478C17.2822 73.3231 8.88273 58.3605 8.11035 35.0076C8.04477 
+---------------------------------------------------------------------------
+RuntimeError                              Traceback (most recent call last)
+/tmp/ipython-input-3981537382.py in <cell line: 0>()
+    193     return df, cheapest, most_expensive
+    194 
+--> 195 df, cheapest, most_expensive = asyncio.run(parse_wildberries_elki())
 
-!playwright install chromium
+5 frames
+/usr/local/lib/python3.12/dist-packages/nest_asyncio.py in run(main, debug)
+     28         task = asyncio.ensure_future(main)
+     29         try:
+---> 30             return loop.run_until_complete(task)
+     31         finally:
+     32             if not task.done():
 
+/usr/local/lib/python3.12/dist-packages/nest_asyncio.py in run_until_complete(self, future)
+     96                 raise RuntimeError(
+     97                     'Event loop stopped before Future completed.')
+---> 98             return f.result()
+     99 
+    100     def _run_once(self):
 
+/usr/lib/python3.12/asyncio/futures.py in result(self)
+    200         self.__log_traceback = False
+    201         if self._exception is not None:
+--> 202             raise self._exception.with_traceback(self._exception_tb)
+    203         return self._result
+    204 
 
-import asyncio
-import nest_asyncio
-from playwright.async_api import async_playwright
-from bs4 import BeautifulSoup
-import pandas as pd
-import re
+/usr/lib/python3.12/asyncio/tasks.py in __step_run_and_handle_result(***failed resolving arguments***)
+    312                 # We use the `send` method directly, because coroutines
+    313                 # don't have `__iter__` and `__next__` methods.
+--> 314                 result = coro.send(None)
+    315             else:
+    316                 result = coro.throw(exc)
 
-nest_asyncio.apply()
+/tmp/ipython-input-3981537382.py in parse_wildberries_elki()
+     82         # 2. Находим строку поиска и вводим "ёлка"
+     83         # ------------------------------
+---> 84         search_selector = await find_search_selector(page)
+     85 
+     86         query = "ёлка"
 
-async def find_search_selector(page):
-    """
-    Пытаемся найти строку поиска по набору возможных селекторов.
-    Возвращаем первый сработавший селектор.
-    """
-    selectors = [
-        'input[id="searchInput"]',
-        'input[id*="search"]',
-        'input[name="search"]',
-        'input[type="search"]',
-        'input[placeholder*="Поиск"]',
-        'input[placeholder*="поиск"]',
-        'input[placeholder*="Найти"]',
-        'input[placeholder*="найти"]',
-        'input[class*="search"]',
-    ]
+/tmp/ipython-input-3981537382.py in find_search_selector(page)
+     44     print("❌ Не нашёл поле поиска. Вот начало HTML страницы:")
+     45     print(html[:2000])
+---> 46     raise RuntimeError("Не удалось найти строку поиска — страница, возможно, отличается или доступ ограничен.")
+     47 
+     48 
 
-    for sel in selectors:
-        loc = page.locator(sel)
-        try:
-            count = await loc.count()
-        except Exception:
-            count = 0
-        if count > 0:
-            print(f"Нашли поле поиска по селектору: {sel}")
-            # ждём, пока оно станет видимым/редактируемым
-            try:
-                await loc.first.wait_for(state="visible", timeout=10000)
-            except Exception:
-                pass
-            return sel
-
-    # если ничего не нашли — печатаем первые символы HTML и падаем с понятной ошибкой
-    html = await page.content()
-    print("❌ Не нашёл поле поиска. Вот начало HTML страницы:")
-    print(html[:2000])
-    raise RuntimeError("Не удалось найти строку поиска — страница, возможно, отличается или доступ ограничен.")
-
-
-async def parse_wildberries_elki():
-    all_products = []
-    seen_ids = set()
-    base_url = "https://www.wildberries.ru"
-
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1366, "height": 768}
-        )
-        page = await context.new_page()
-        page.set_default_timeout(60000)  # побольше таймауты
-
-        # ------------------------------
-        # 1. Открываем Wildberries
-        # ------------------------------
-        await page.goto(base_url)
-        await page.wait_for_load_state("networkidle")
-        print("Открыли страницу:", page.url)
-        print("Title:", await page.title())
-
-        # пробуем закрыть всплывашки (если есть)
-        try:
-            await page.click("button[aria-label*='Закрыть'], button[aria-label*='закрыть']")
-        except:
-            pass
-
-        # ------------------------------
-        # 2. Находим строку поиска и вводим "ёлка"
-        # ------------------------------
-        search_selector = await find_search_selector(page)
-
-        query = "ёлка"
-        await page.fill(search_selector, query)
-        await page.press(search_selector, "Enter")
-        await page.wait_for_load_state("networkidle")
-
-        # ------------------------------
-        # 3. Обход первых 5 страниц
-        # ------------------------------
-        for page_num in range(1, 6):
-            print(f"\nСобираю данные со страницы {page_num}...")
-
-            if page_num > 1:
-                url = (
-                    "https://www.wildberries.ru/catalog/0/search.aspx"
-                    "?search=%D0%B5%D0%BB%D0%BA%D0%B0&page=" + str(page_num)
-                )
-                await page.goto(url)
-                await page.wait_for_load_state("networkidle")
-                print("URL страницы:", page.url)
-
-            html = await page.content()
-            soup = BeautifulSoup(html, "html.parser")
-
-            cards = soup.select("article[data-nm-id]")
-            if not cards:
-                cards = soup.select("div.product-card")
-
-            print("  Найдено карточек:", len(cards))
-
-            for card in cards:
-                nm_id = card.get("data-nm-id")
-                if nm_id:
-                    if nm_id in seen_ids:
-                        continue
-                    seen_ids.add(nm_id)
-
-                # Название
-                name_elem = (
-                    card.select_one("[class*='product-card__name']")
-                    or card.select_one("a.product-card__name")
-                    or card.select_one("span.product-card__name")
-                )
-                if name_elem:
-                    name = name_elem.get_text(strip=True)
-                else:
-                    img = card.find("img")
-                    name = img.get("alt", "").strip() if img else ""
-
-                if not name:
-                    continue
-
-                # Цена
-                price_elem = (
-                    card.select_one("ins[class*='lower-price']")
-                    or card.select_one("span[class*='lower-price']")
-                    or card.select_one("p[class*='price']")
-                )
-                if price_elem:
-                    price_text = price_elem.get_text(" ", strip=True)
-                else:
-                    price_text = ""
-
-                digits = re.findall(r"\d+", price_text.replace("\xa0", " "))
-                price_value = int("".join(digits)) if digits else None
-
-                # Ссылка
-                link_elem = card.find("a", href=True)
-                if link_elem:
-                    href = link_elem["href"]
-                    if href.startswith("/"):
-                        href = base_url + href
-                else:
-                    href = ""
-
-                all_products.append(
-                    {
-                        "Название": name,
-                        "Цена": price_value,
-                        "Ссылка": href,
-                    }
-                )
-
-        await browser.close()
-
-    # ------------------------------
-    # 4. pandas + CSV + min/max
-    # ------------------------------
-    df = pd.DataFrame(all_products)
-    df = df.dropna(subset=["Цена"])
-    df = df.drop_duplicates(subset=["Ссылка"])
-    df["Цена"] = df["Цена"].astype(int)
-
-    print("\nВсего ёлок в таблице:", len(df))
-
-    csv_name = "wildberries_elki.csv"
-    df.to_csv(csv_name, index=False, encoding="utf-8-sig")
-    print(f"Таблица сохранена в файл {csv_name}")
-
-    cheapest = df.loc[df["Цена"].idx_min()]
-    most_expensive = df.loc[df["Цена"].idx_max()]
-
-    print("\nСамая дешёвая ёлка:")
-    print(cheapest)
-
-    print("\nСамая дорогая ёлка:")
-    print(most_expensive)
-
-    return df, cheapest, most_expensive
-
-df, cheapest, most_expensive = asyncio.run(parse_wildberries_elki())
+RuntimeError: Не удалось найти строку поиска — страница, возможно, отличается или доступ ограничен.
