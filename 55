@@ -1,61 +1,109 @@
-Открыли страницу: https://www.wildberries.ru/
-Title: Почти готово...
-❌ Не нашёл поле поиска. Вот начало HTML страницы:
-<!DOCTYPE html><html data-theme="light"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta http-equiv="refresh" content="60"><link rel="icon" href="data:,"><script>window.LOAD_START=Date.now()</script><title>Почти готово...</title><script type="module" crossorigin="" src="/__wbaas/challenges/antibot/__static/v1/index-BqjVCqpX.js"></script><link rel="stylesheet" crossorigin="" href="/__wbaas/challenges/antibot/__static/v1/index-CmGukrMr.css"></head><body><div class="w"><div>
-              <div class="support">
-        <svg class="support-logo" width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M51.6852 75.9854C58.5299 73.4069 85.3546 60.5592 86.5418 17.243C86.5924 15.3976 85.6274 13.6535 84.0564 12.6782C63.271 -0.226077 36.9426 -0.226076 16.1572 12.6782C14.5862 13.6535 13.6212 15.3976 13.6718 17.243C14.859 60.5592 41.6837 73.4069 48.5284 75.9854C49.5503 76.3704 50.6633 76.3704 51.6852 75.9854Z" fill="url(#paint0_linear_9028_11756)"></path>
-          <g data-figma-bg-blur-radius="9.27278">
-            <path d="M13.9134 27.8499L10.6156 29.7302C8.72144 30.8101 7.53858 32.8483 7.61053 35.0238C9.16345 81.9803 41.4117 95.3443 48.6667 97.7616C49.6209 98.0795 50.594 98.0795 51.5481 97.7616C58.8031 95.3443 91.0514 81.9803 92.6043 35.0238C92.6763 32.8483 91.4934 30.8101 89.5993 29.7302L86.3014 27.8499C63.8738 15.0627 36.3411 15.0627 13.9134 27.8499Z" fill="url(#paint1_linear_9028_11756)" fill-opacity="0.5"></path>
-            <path d="M14.1611 28.2839C36.4352 15.5844 63.7797 15.5844 86.0537 28.2839L89.3516 30.1648C91.0908 31.1564 92.1701 33.0246 92.1045 35.0076C91.3321 58.3605 82.9327 73.3231 73.8545 82.7478C64.7663 92.1828 54.9712 96.0935 51.3896 97.2869C50.5382 97.5705 49.6766 97.5705 48.8252 97.2869C45.2437 96.0935 35.4485 92.1828 26.3604 82.7478C17.2822 73.3231 8.88273 58.3605 8.11035 35.0076C8.04477 
----------------------------------------------------------------------------
-RuntimeError                              Traceback (most recent call last)
-/tmp/ipython-input-3981537382.py in <cell line: 0>()
-    193     return df, cheapest, most_expensive
-    194 
---> 195 df, cheapest, most_expensive = asyncio.run(parse_wildberries_elki())
+import asyncio, nest_asyncio, pandas as pd
+from urllib.parse import urlencode
+from playwright.async_api import async_playwright
 
-5 frames
-/usr/local/lib/python3.12/dist-packages/nest_asyncio.py in run(main, debug)
-     28         task = asyncio.ensure_future(main)
-     29         try:
----> 30             return loop.run_until_complete(task)
-     31         finally:
-     32             if not task.done():
+nest_asyncio.apply()
 
-/usr/local/lib/python3.12/dist-packages/nest_asyncio.py in run_until_complete(self, future)
-     96                 raise RuntimeError(
-     97                     'Event loop stopped before Future completed.')
----> 98             return f.result()
-     99 
-    100     def _run_once(self):
+SEARCH_ENDPOINT = "https://search.wb.ru/exactmatch/ru/common/v4/search"
+DEST = "-1257786"  # часто используют для РФ; если нужно — можно поменять
 
-/usr/lib/python3.12/asyncio/futures.py in result(self)
-    200         self.__log_traceback = False
-    201         if self._exception is not None:
---> 202             raise self._exception.with_traceback(self._exception_tb)
-    203         return self._result
-    204 
+def build_url(query: str, page: int) -> str:
+    params = {
+        "appType": "1",
+        "curr": "rub",
+        "dest": DEST,
+        "query": query,
+        "page": str(page),
+        "resultset": "catalog",
+        "sort": "popular",
+        "spp": "0",
+    }
+    return f"{SEARCH_ENDPOINT}?{urlencode(params)}"
 
-/usr/lib/python3.12/asyncio/tasks.py in __step_run_and_handle_result(***failed resolving arguments***)
-    312                 # We use the `send` method directly, because coroutines
-    313                 # don't have `__iter__` and `__next__` methods.
---> 314                 result = coro.send(None)
-    315             else:
-    316                 result = coro.throw(exc)
+def product_link(nm_id: int) -> str:
+    return f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx"
 
-/tmp/ipython-input-3981537382.py in parse_wildberries_elki()
-     82         # 2. Находим строку поиска и вводим "ёлка"
-     83         # ------------------------------
----> 84         search_selector = await find_search_selector(page)
-     85 
-     86         query = "ёлка"
+async def run(query="ёлка", pages=5):
+    rows = []
+    seen = set()
 
-/tmp/ipython-input-3981537382.py in find_search_selector(page)
-     44     print("❌ Не нашёл поле поиска. Вот начало HTML страницы:")
-     45     print(html[:2000])
----> 46     raise RuntimeError("Не удалось найти строку поиска — страница, возможно, отличается или доступ ограничен.")
-     47 
-     48 
+    async with async_playwright() as p:
+        # request-контекст Playwright (без открытия сайта в браузере)
+        req = await p.request.new_context(
+            extra_http_headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "ru-RU,ru;q=0.9",
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Origin": "https://www.wildberries.ru",
+                "Referer": "https://www.wildberries.ru/",
+            }
+        )
 
-RuntimeError: Не удалось найти строку поиска — страница, возможно, отличается или доступ ограничен.
+        for page in range(1, pages + 1):
+            url = build_url(query, page)
+            print("GET:", url)
+
+            resp = await req.get(url, timeout=60000)
+            if not resp.ok:
+                text = await resp.text()
+                raise RuntimeError(f"HTTP {resp.status} на странице {page}. Ответ: {text[:500]}")
+
+            data = await resp.json()
+
+            products = (data.get("data") or {}).get("products") or []
+            print("  товаров:", len(products))
+
+            for pr in products:
+                nm_id = pr.get("id")
+                if not nm_id or nm_id in seen:
+                    continue
+                seen.add(nm_id)
+
+                name = pr.get("name") or ""
+                brand = pr.get("brand") or ""
+
+                # цены у WB часто в "копейках * 100" (то есть рубли = значение / 100)
+                price_u = pr.get("salePriceU") or pr.get("priceU")
+                price = (price_u / 100) if isinstance(price_u, (int, float)) else None
+
+                rows.append({
+                    "id": nm_id,
+                    "Название": name,
+                    "Бренд": brand,
+                    "Цена": price,
+                    "Ссылка": product_link(nm_id),
+                })
+
+        await req.dispose()
+
+    df = pd.DataFrame(rows)
+    df = df.dropna(subset=["Цена"]).drop_duplicates(subset=["id"])
+    df["Цена"] = df["Цена"].astype(float)
+
+    csv_name = "wildberries_elki.csv"
+    df.to_csv(csv_name, index=False, encoding="utf-8-sig")
+
+    cheapest = df.loc[df["Цена"].idxmin()]
+    most_expensive = df.loc[df["Цена"].idxmax()]
+
+    print("\n✅ Сохранено:", csv_name)
+    print("✅ Всего товаров:", len(df))
+
+    print("\nСамая дешёвая ёлка:")
+    print(cheapest)
+
+    print("\nСамая дорогая ёлка:")
+    print(most_expensive)
+
+    return df, cheapest, most_expensive
+
+df, cheapest, most_expensive = asyncio.run(run(query="ёлка", pages=5))
+df.head(10)
+
+
+!pip install playwright nest_asyncio pandas
+!playwright install chromium
