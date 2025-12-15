@@ -1,11 +1,12 @@
-import asyncio, nest_asyncio, pandas as pd
+import asyncio, random, time
+import nest_asyncio, pandas as pd
 from urllib.parse import urlencode
 from playwright.async_api import async_playwright
 
 nest_asyncio.apply()
 
 SEARCH_ENDPOINT = "https://search.wb.ru/exactmatch/ru/common/v4/search"
-DEST = "-1257786"  # часто используют для РФ; если нужно — можно поменять
+DEST = "-1257786"
 
 def build_url(query: str, page: int) -> str:
     params = {
@@ -23,12 +24,38 @@ def build_url(query: str, page: int) -> str:
 def product_link(nm_id: int) -> str:
     return f"https://www.wildberries.ru/catalog/{nm_id}/detail.aspx"
 
-async def run(query="ёлка", pages=5):
+async def fetch_json_with_backoff(req, url: str, max_tries: int = 6):
+    """
+    Аккуратный запрос: при 429 ждём и пробуем снова.
+    Не пытаемся "обойти" лимиты, просто снижаем частоту.
+    """
+    for attempt in range(1, max_tries + 1):
+        resp = await req.get(url, timeout=60000)
+        status = resp.status
+
+        if status == 200:
+            return await resp.json()
+
+        # 429 Too Many Requests — ждём дольше и повторяем
+        if status == 429:
+            base = 2 ** attempt
+            jitter = random.uniform(0.2, 1.2)
+            wait_s = min(60, base + jitter)  # не больше 60 сек
+            print(f"  ⚠️ 429 Too Many Requests. Жду {wait_s:.1f} сек (попытка {attempt}/{max_tries})")
+            await asyncio.sleep(wait_s)
+            continue
+
+        # другие статусы — выводим кусок ответа
+        text = await resp.text()
+        raise RuntimeError(f"HTTP {status}. Ответ: {text[:300]}")
+
+    raise RuntimeError("Слишком много 429 — сервер продолжает ограничивать запросы. Попробуй позже или уменьшить нагрузку.")
+
+async def run(query="ёлка", pages=5, page_pause=(4.0, 7.0), max_items_per_page=None):
     rows = []
     seen = set()
 
     async with async_playwright() as p:
-        # request-контекст Playwright (без открытия сайта в браузере)
         req = await p.request.new_context(
             extra_http_headers={
                 "Accept": "application/json, text/plain, */*",
@@ -45,16 +72,13 @@ async def run(query="ёлка", pages=5):
 
         for page in range(1, pages + 1):
             url = build_url(query, page)
-            print("GET:", url)
+            print(f"\nСтраница {page}: {url}")
 
-            resp = await req.get(url, timeout=60000)
-            if not resp.ok:
-                text = await resp.text()
-                raise RuntimeError(f"HTTP {resp.status} на странице {page}. Ответ: {text[:500]}")
-
-            data = await resp.json()
+            data = await fetch_json_with_backoff(req, url)
 
             products = (data.get("data") or {}).get("products") or []
+            if max_items_per_page:
+                products = products[:max_items_per_page]
             print("  товаров:", len(products))
 
             for pr in products:
@@ -66,7 +90,6 @@ async def run(query="ёлка", pages=5):
                 name = pr.get("name") or ""
                 brand = pr.get("brand") or ""
 
-                # цены у WB часто в "копейках * 100" (то есть рубли = значение / 100)
                 price_u = pr.get("salePriceU") or pr.get("priceU")
                 price = (price_u / 100) if isinstance(price_u, (int, float)) else None
 
@@ -78,10 +101,14 @@ async def run(query="ёлка", pages=5):
                     "Ссылка": product_link(nm_id),
                 })
 
+            # Пауза между страницами (очень важно против 429)
+            pause = random.uniform(page_pause[0], page_pause[1])
+            print(f"  ⏳ Пауза {pause:.1f} сек...")
+            await asyncio.sleep(pause)
+
         await req.dispose()
 
-    df = pd.DataFrame(rows)
-    df = df.dropna(subset=["Цена"]).drop_duplicates(subset=["id"])
+    df = pd.DataFrame(rows).dropna(subset=["Цена"]).drop_duplicates(subset=["id"])
     df["Цена"] = df["Цена"].astype(float)
 
     csv_name = "wildberries_elki.csv"
@@ -101,9 +128,6 @@ async def run(query="ёлка", pages=5):
 
     return df, cheapest, most_expensive
 
-df, cheapest, most_expensive = asyncio.run(run(query="ёлка", pages=5))
+# Можно снизить нагрузку: например, брать максимум 50 товаров со страницы
+df, cheapest, most_expensive = asyncio.run(run(query="ёлка", pages=5, page_pause=(5, 9), max_items_per_page=60))
 df.head(10)
-
-
-!pip install playwright nest_asyncio pandas
-!playwright install chromium
