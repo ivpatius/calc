@@ -1,0 +1,192 @@
+# Если запускаете в Colab / новом окружении, раскомментируйте эти строки:
+# !pip install selenium webdriver-manager bs4 pandas
+
+import time
+import re
+import pandas as pd
+from bs4 import BeautifulSoup
+
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from webdriver_manager.chrome import ChromeDriverManager
+
+# --------------------------
+# 1. Настраиваем браузер
+# --------------------------
+chrome_options = Options()
+
+# можно включить безголовый режим, если нужно:
+# chrome_options.add_argument("--headless=new")
+
+chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+chrome_options.add_experimental_option("useAutomationExtension", False)
+chrome_options.add_argument(
+    "user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
+chrome_options.add_argument("--window-size=1366,768")
+
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=chrome_options)
+
+# убираем navigator.webdriver
+driver.execute_cdp_cmd(
+    "Page.addScriptToEvaluateOnNewDocument",
+    {
+        "source": """
+        Object.defineProperty(navigator, 'webdriver', {
+            get: () => undefined
+        })
+        """
+    }
+)
+
+# --------------------------
+# 2. Открываем Wildberries
+# --------------------------
+base_url = "https://www.wildberries.ru"
+driver.get(base_url)
+time.sleep(5)  # даём странице подгрузиться
+
+# пробуем закрыть любое всплывающее окно, если оно есть
+try:
+    close_btn = driver.find_element(By.CSS_SELECTOR, "[class*='close'], button[aria-label*='Закрыть']")
+    close_btn.click()
+    time.sleep(1)
+except Exception:
+    pass  # если не нашли — просто идём дальше
+
+# --------------------------
+# 3. Вводим запрос "елка"
+# --------------------------
+query = "ёлка"
+
+# ищем поле поиска по placeholder'у
+search_input = driver.find_element(By.CSS_SELECTOR, "input[placeholder*='Поиск'], input[placeholder*='поиск']")
+search_input.clear()
+search_input.send_keys(query)
+search_input.send_keys(Keys.ENTER)
+
+time.sleep(5)  # ждём загрузку результатов
+
+# --------------------------
+# 4. Сбор данных с первых 5 страниц
+# --------------------------
+all_products = []
+seen_ids = set()
+
+for page in range(1, 6):
+    print(f"Собираю данные со страницы {page}...")
+
+    # на первой странице мы уже находимся после поиска
+    if page > 1:
+        # напрямую переходим по URL поиска с параметром page
+        driver.get(
+            "https://www.wildberries.ru/catalog/0/search.aspx"
+            "?search=%D0%B5%D0%BB%D0%BA%D0%B0&page=" + str(page)
+        )
+        time.sleep(5)
+
+    html = driver.page_source
+    soup = BeautifulSoup(html, "html.parser")
+
+    # карточки товаров (пробуем несколько вариантов селекторов)
+    cards = soup.select("article[data-nm-id]")   # более новый вариант
+    if not cards:
+        cards = soup.select("div.product-card")  # fallback, если структура другая
+
+    print("  Найдено карточек:", len(cards))
+
+    for card in cards:
+        # ID товара
+        nm_id = card.get("data-nm-id")
+        if nm_id:
+            if nm_id in seen_ids:
+                continue
+            seen_ids.add(nm_id)
+
+        # Название
+        name_elem = (
+            card.select_one("[class*='product-card__name']")
+            or card.select_one("a.product-card__name")
+            or card.select_one("span.product-card__name")
+        )
+
+        if name_elem:
+            name = name_elem.get_text(strip=True)
+        else:
+            img = card.find("img")
+            name = img.get("alt", "").strip() if img else ""
+
+        if not name:
+            continue  # пустые карточки пропускаем
+
+        # Цена
+        price_elem = (
+            card.select_one("ins[class*='lower-price']")
+            or card.select_one("span[class*='lower-price']")
+            or card.select_one("p[class*='price']")
+        )
+        if price_elem:
+            price_text = price_elem.get_text(" ", strip=True)
+        else:
+            price_text = ""
+
+        # вытаскиваем только цифры
+        digits = re.findall(r"\d+", price_text.replace("\xa0", " "))
+        price_value = int("".join(digits)) if digits else None
+
+        # Ссылка на товар
+        link_elem = card.find("a", href=True)
+        if link_elem:
+            href = link_elem["href"]
+            if href.startswith("/"):
+                href = base_url + href
+        else:
+            href = ""
+
+        all_products.append(
+            {
+                "Название": name,
+                "Цена": price_value,
+                "Ссылка": href,
+            }
+        )
+
+# закрываем браузер
+driver.quit()
+
+# --------------------------
+# 5. В таблицу pandas + CSV
+# --------------------------
+df = pd.DataFrame(all_products)
+
+# убираем строки без цены и дубликаты по ссылке
+df = df.dropna(subset=["Цена"])
+df = df.drop_duplicates(subset=["Ссылка"])
+
+# на всякий случай приводим цену к int
+df["Цена"] = df["Цена"].astype(int)
+
+print("Всего ёлок в таблице:", len(df))
+
+csv_name = "wildberries_elki.csv"
+df.to_csv(csv_name, index=False, encoding="utf-8-sig")
+print(f"Таблица сохранена в файл {csv_name}")
+
+# --------------------------
+# 6. Самая дешёвая и самая дорогая
+# --------------------------
+cheapest = df.loc[df["Цена"].idx_min()]
+most_expensive = df.loc[df["Цена"].idx_max()]
+
+print("\nСамая дешёвая ёлка:")
+print(cheapest)
+
+print("\nСамая дорогая ёлка:")
+print(most_expensive)
