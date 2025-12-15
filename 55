@@ -1,38 +1,10 @@
----------------------------------------------------------------------------
-SessionNotCreatedException                Traceback (most recent call last)
-/tmp/ipython-input-336912306.py in <cell line: 0>()
-     30 
-     31 service = Service(ChromeDriverManager().install())
----> 32 driver = webdriver.Chrome(service=service, options=chrome_options)
-     33 
-     34 # убираем navigator.webdriver
+!apt-get update -y
+!apt-get install -y chromium-browser chromium-chromedriver
 
-5 frames
-/usr/local/lib/python3.12/dist-packages/selenium/webdriver/remote/errorhandler.py in check_response(self, response)
-    230                 alert_text = value["alert"].get("text")
-    231             raise exception_class(message, screen, stacktrace, alert_text)  # type: ignore[call-arg]  # mypy is not smart enough here
---> 232         raise exception_class(message, screen, stacktrace)
+!pip install selenium bs4 pandas
 
-SessionNotCreatedException: Message: session not created: Chrome instance exited. Examine ChromeDriver verbose log to determine the cause.; For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#sessionnotcreatedexception
-Stacktrace:
-#0 0x57cd77d7219a <unknown>
-#1 0x57cd777efc4b <unknown>
-#2 0x57cd77829d1d <unknown>
-#3 0x57cd778256d3 <unknown>
-#4 0x57cd7787524c <unknown>
-#5 0x57cd7787496c <unknown>
-#6 0x57cd77833c42 <unknown>
-#7 0x57cd778348f1 <unknown>
-#8 0x57cd77d3af39 <unknown>
-#9 0x57cd77d3de7d <unknown>
-#10 0x57cd77d23c81 <unknown>
-#11 0x57cd77d3ea5b <unknown>
-#12 0x57cd77d0aa50 <unknown>
-#13 0x57cd77d5faa8 <unknown>
-#14 0x57cd77d5fc79 <unknown>
-#15 0x57cd77d714f3 <unknown>
-#16 0x78bfa1cfdac3 <unknown>
-
+import sys
+sys.path.insert(0, '/usr/lib/chromium-browser/')
 
 
 
@@ -46,16 +18,16 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from webdriver_manager.chrome import ChromeDriverManager
 
-# --------------------------
-# 1. Настраиваем браузер
-# --------------------------
+# ---------------------------------------------------
+# 1. Настраиваем браузер (обязательно headless в Colab)
+# ---------------------------------------------------
 chrome_options = Options()
+chrome_options.add_argument("--headless=new")          # безголовый режим
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
 
-# можно включить безголовый режим, если нужно:
-# chrome_options.add_argument("--headless=new")
-
+# немного "фейкового" поведения браузера
 chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
 chrome_options.add_experimental_option("useAutomationExtension", False)
@@ -66,10 +38,12 @@ chrome_options.add_argument(
 )
 chrome_options.add_argument("--window-size=1366,768")
 
-service = Service(ChromeDriverManager().install())
+# chromedriver установлен через apt: обычно лежит в /usr/bin/chromedriver
+service = Service("/usr/bin/chromedriver")
+
 driver = webdriver.Chrome(service=service, options=chrome_options)
 
-# убираем navigator.webdriver
+# отключаем navigator.webdriver
 driver.execute_cdp_cmd(
     "Page.addScriptToEvaluateOnNewDocument",
     {
@@ -81,46 +55,47 @@ driver.execute_cdp_cmd(
     }
 )
 
-# --------------------------
+# ---------------------------------------------------
 # 2. Открываем Wildberries
-# --------------------------
+# ---------------------------------------------------
 base_url = "https://www.wildberries.ru"
 driver.get(base_url)
 time.sleep(5)  # даём странице подгрузиться
 
-# пробуем закрыть любое всплывающее окно, если оно есть
+# пробуем закрыть всплывающее окно, если есть
 try:
     close_btn = driver.find_element(By.CSS_SELECTOR, "[class*='close'], button[aria-label*='Закрыть']")
     close_btn.click()
     time.sleep(1)
 except Exception:
-    pass  # если не нашли — просто идём дальше
+    pass
 
-# --------------------------
-# 3. Вводим запрос "елка"
-# --------------------------
+# ---------------------------------------------------
+# 3. Вводим запрос "ёлка"
+# ---------------------------------------------------
 query = "ёлка"
 
-# ищем поле поиска по placeholder'у
-search_input = driver.find_element(By.CSS_SELECTOR, "input[placeholder*='Поиск'], input[placeholder*='поиск']")
+search_input = driver.find_element(
+    By.CSS_SELECTOR,
+    "input[placeholder*='Поиск'], input[placeholder*='поиск']"
+)
 search_input.clear()
 search_input.send_keys(query)
 search_input.send_keys(Keys.ENTER)
 
-time.sleep(5)  # ждём загрузку результатов
+time.sleep(5)
 
-# --------------------------
+# ---------------------------------------------------
 # 4. Сбор данных с первых 5 страниц
-# --------------------------
+# ---------------------------------------------------
 all_products = []
 seen_ids = set()
 
 for page in range(1, 6):
     print(f"Собираю данные со страницы {page}...")
 
-    # на первой странице мы уже находимся после поиска
     if page > 1:
-        # напрямую переходим по URL поиска с параметром page
+        # прямой переход на нужную страницу поиска
         driver.get(
             "https://www.wildberries.ru/catalog/0/search.aspx"
             "?search=%D0%B5%D0%BB%D0%BA%D0%B0&page=" + str(page)
@@ -130,28 +105,26 @@ for page in range(1, 6):
     html = driver.page_source
     soup = BeautifulSoup(html, "html.parser")
 
-    # карточки товаров (пробуем несколько вариантов селекторов)
-    cards = soup.select("article[data-nm-id]")   # более новый вариант
+    # карточки товаров
+    cards = soup.select("article[data-nm-id]")
     if not cards:
-        cards = soup.select("div.product-card")  # fallback, если структура другая
+        cards = soup.select("div.product-card")
 
     print("  Найдено карточек:", len(cards))
 
     for card in cards:
-        # ID товара
         nm_id = card.get("data-nm-id")
         if nm_id:
             if nm_id in seen_ids:
                 continue
             seen_ids.add(nm_id)
 
-        # Название
+        # название
         name_elem = (
             card.select_one("[class*='product-card__name']")
             or card.select_one("a.product-card__name")
             or card.select_one("span.product-card__name")
         )
-
         if name_elem:
             name = name_elem.get_text(strip=True)
         else:
@@ -159,9 +132,9 @@ for page in range(1, 6):
             name = img.get("alt", "").strip() if img else ""
 
         if not name:
-            continue  # пустые карточки пропускаем
+            continue
 
-        # Цена
+        # цена
         price_elem = (
             card.select_one("ins[class*='lower-price']")
             or card.select_one("span[class*='lower-price']")
@@ -172,11 +145,10 @@ for page in range(1, 6):
         else:
             price_text = ""
 
-        # вытаскиваем только цифры
         digits = re.findall(r"\d+", price_text.replace("\xa0", " "))
         price_value = int("".join(digits)) if digits else None
 
-        # Ссылка на товар
+        # ссылка
         link_elem = card.find("a", href=True)
         if link_elem:
             href = link_elem["href"]
@@ -196,16 +168,13 @@ for page in range(1, 6):
 # закрываем браузер
 driver.quit()
 
-# --------------------------
-# 5. В таблицу pandas + CSV
-# --------------------------
+# ---------------------------------------------------
+# 5. pandas + CSV
+# ---------------------------------------------------
 df = pd.DataFrame(all_products)
 
-# убираем строки без цены и дубликаты по ссылке
 df = df.dropna(subset=["Цена"])
 df = df.drop_duplicates(subset=["Ссылка"])
-
-# на всякий случай приводим цену к int
 df["Цена"] = df["Цена"].astype(int)
 
 print("Всего ёлок в таблице:", len(df))
@@ -214,9 +183,9 @@ csv_name = "wildberries_elki.csv"
 df.to_csv(csv_name, index=False, encoding="utf-8-sig")
 print(f"Таблица сохранена в файл {csv_name}")
 
-# --------------------------
-# 6. Самая дешёвая и самая дорогая
-# --------------------------
+# ---------------------------------------------------
+# 6. Самая дешёвая и самая дорогая ёлка
+# ---------------------------------------------------
 cheapest = df.loc[df["Цена"].idx_min()]
 most_expensive = df.loc[df["Цена"].idx_max()]
 
@@ -225,14 +194,3 @@ print(cheapest)
 
 print("\nСамая дорогая ёлка:")
 print(most_expensive)
-
-
-
-!pip install selenium webdriver-manager bs4 pandas
-!apt-get update
-!apt-get install -y wget
-!wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-!apt-get install -y /tmp/chrome.deb
-!pip install webdriver-manager
-!pip install --upgrade selenium webdriver-manager
-!pip install chromedriver-autoinstaller
