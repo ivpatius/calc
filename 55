@@ -1,168 +1,18 @@
-!pip install playwright nest_asyncio bs4 pandas
+---------------------------------------------------------------------------
+TimeoutError                              Traceback (most recent call last)
+/tmp/ipython-input-591084370.py in <cell line: 0>()
+    159 
+    160 # запускаем асинхронную функцию в Colab
+--> 161 df, cheapest, most_expensive = asyncio.run(parse_wildberries_elki())
 
-# установка браузера для Playwright
-!playwright install chromium
+10 frames
+/usr/local/lib/python3.12/dist-packages/playwright/_impl/_connection.py in wrap_api_call(self, cb, is_internal, title)
+    557             return await cb()
+    558         except Exception as error:
+--> 559             raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+    560         finally:
+    561             self._api_zone.set(None)
 
-
-
-import asyncio
-import nest_asyncio
-from playwright.async_api import async_playwright
-from bs4 import BeautifulSoup
-import pandas as pd
-import re
-
-nest_asyncio.apply()
-
-async def parse_wildberries_elki():
-    all_products = []
-    seen_ids = set()
-    base_url = "https://www.wildberries.ru"
-
-    async with async_playwright() as p:
-        # запускаем Chromium в headless-режиме с "человеческим" user-agent
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            viewport={"width": 1366, "height": 768}
-        )
-        page = await context.new_page()
-
-        # ------------------------------
-        # 1. Открываем Wildberries
-        # ------------------------------
-        await page.goto(base_url)
-        await page.wait_for_load_state("networkidle")
-
-        # пробуем закрыть всплывашки
-        try:
-            await page.click("button[aria-label*='Закрыть'], button[aria-label*='закрыть']")
-        except:
-            pass
-
-        # ------------------------------
-        # 2. Вводим запрос "ёлка"
-        # ------------------------------
-        query = "ёлка"
-
-        # ищем строку поиска по placeholder (без учёта регистра)
-        search_selector = 'input[placeholder*="Поиск"], input[placeholder*="поиск"]'
-        await page.fill(search_selector, query)
-        await page.press(search_selector, "Enter")
-        await page.wait_for_load_state("networkidle")
-
-        # ------------------------------
-        # 3. Обход первых 5 страниц
-        # ------------------------------
-        for page_num in range(1, 6):
-            print(f"Собираю данные со страницы {page_num}...")
-
-            if page_num > 1:
-                # прямой переход на нужную страницу выдачи
-                url = (
-                    "https://www.wildberries.ru/catalog/0/search.aspx"
-                    "?search=%D0%B5%D0%BB%D0%BA%D0%B0&page=" + str(page_num)
-                )
-                await page.goto(url)
-                await page.wait_for_load_state("networkidle")
-
-            html = await page.content()
-            soup = BeautifulSoup(html, "html.parser")
-
-            # карточки товаров
-            cards = soup.select("article[data-nm-id]")
-            if not cards:
-                cards = soup.select("div.product-card")
-
-            print("  Найдено карточек:", len(cards))
-
-            for card in cards:
-                # ID товара
-                nm_id = card.get("data-nm-id")
-                if nm_id:
-                    if nm_id in seen_ids:
-                        continue
-                    seen_ids.add(nm_id)
-
-                # Название
-                name_elem = (
-                    card.select_one("[class*='product-card__name']")
-                    or card.select_one("a.product-card__name")
-                    or card.select_one("span.product-card__name")
-                )
-                if name_elem:
-                    name = name_elem.get_text(strip=True)
-                else:
-                    img = card.find("img")
-                    name = img.get("alt", "").strip() if img else ""
-
-                if not name:
-                    continue
-
-                # Цена
-                price_elem = (
-                    card.select_one("ins[class*='lower-price']")
-                    or card.select_one("span[class*='lower-price']")
-                    or card.select_one("p[class*='price']")
-                )
-                if price_elem:
-                    price_text = price_elem.get_text(" ", strip=True)
-                else:
-                    price_text = ""
-
-                digits = re.findall(r"\d+", price_text.replace("\xa0", " "))
-                price_value = int("".join(digits)) if digits else None
-
-                # Ссылка
-                link_elem = card.find("a", href=True)
-                if link_elem:
-                    href = link_elem["href"]
-                    if href.startswith("/"):
-                        href = base_url + href
-                else:
-                    href = ""
-
-                all_products.append(
-                    {
-                        "Название": name,
-                        "Цена": price_value,
-                        "Ссылка": href,
-                    }
-                )
-
-        await browser.close()
-
-    # ------------------------------
-    # 4. pandas + CSV + min/max
-    # ------------------------------
-    df = pd.DataFrame(all_products)
-
-    # чистим данные
-    df = df.dropna(subset=["Цена"])
-    df = df.drop_duplicates(subset=["Ссылка"])
-    df["Цена"] = df["Цена"].astype(int)
-
-    print("Всего ёлок в таблице:", len(df))
-
-    csv_name = "wildberries_elki.csv"
-    df.to_csv(csv_name, index=False, encoding="utf-8-sig")
-    print(f"Таблица сохранена в файл {csv_name}")
-
-    # самая дешёвая и дорогая
-    cheapest = df.loc[df["Цена"].idx_min()]
-    most_expensive = df.loc[df["Цена"].idx_max()]
-
-    print("\nСамая дешёвая ёлка:")
-    print(cheapest)
-
-    print("\nСамая дорогая ёлка:")
-    print(most_expensive)
-
-    return df, cheapest, most_expensive
-
-# запускаем асинхронную функцию в Colab
-df, cheapest, most_expensive = asyncio.run(parse_wildberries_elki())
+TimeoutError: Page.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[placeholder*=\"Поиск\"], input[placeholder*=\"поиск\"]")
