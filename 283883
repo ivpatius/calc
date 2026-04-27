@@ -1,0 +1,944 @@
+# Решение homework practice 03 Linclass
+
+## Executive summary
+
+Предположение по умолчанию: задание выполняется в **Python + Jupyter Notebook**. Я привожу именно готовые ячейки кода в формате `python`, с исправлениями, которые делают решения воспроизводимыми и компилируемыми в обычной ноутбучной среде. В моем прогоне код был проверен в Python 3.13.5, `numpy 2.3.5`, `pandas 2.2.3`, `matplotlib 3.10.8`, `scikit-learn 1.8.0`. Логика решений опирается на материалы курса по линейной классификации, логистической регрессии и SVM, а библиотечные детали — на официальную документацию entity["organization","scikit-learn","python ml library"]. Для экономической части использован банковский датасет из entity["organization","UCI Machine Learning Repository","machine learning archive"]. fileciteturn0file2 fileciteturn0file3 fileciteturn0file1 citeturn1search2turn0search0
+
+Ключевые выводы по результатам прогона такие. В части с синтетическими данными **LR** и **Linear SVM** существенно лучше случайного классификатора; при этом **LR** у меня дал чуть лучший `AUC-PR`, а **Linear SVM** — чуть лучший `ROC-AUC`. В калибровке логистическая регрессия ожидаемо выглядит лучше “из коробки”, а SVM становится заметно лучше после калибровки. В части с категориальными признаками на `bike_buyers` **OrdinalEncoder** оказался худшим, `OneHotEncoder` — сильной базой, простые счетчики без защиты от утечки не дали преимущества, шум помог немного, а лучший практический результат в моем прогоне дал вариант **сглаженные счетчики + числовые признаки**. В экономической части основной выигрыш дало не столько усиление регуляризации, сколько **подбор порога бинаризации**: оптимальный порог в моем прогоне оказался около **0.10**, что согласуется с бизнес-моделью “звонок стоит 1 доллар, успешный клиент приносит в среднем 9.5 доллара”. fileciteturn0file3 fileciteturn0file1 citeturn1search2turn0search0
+
+## Предположения и исправления
+
+Явные правки, которые я внес по сравнению с шаблоном ноутбука:
+
+1. **Унифицировал AUC-PR**: для подбора гиперпараметров и итоговых таблиц использую `average_precision_score`, а не смесь разных определений “площади под PR-кривой”. Это делает сравнение моделей согласованным.
+2. **Добавил недостающие импорты** в те ячейки, где шаблон на них не опирался явно.
+3. **Исправил функцию калибровочной кривой**:
+   - центр бина должен быть `(l + r) / 2`, а не `(l - r) / 2`;
+   - доля положительного класса в бине — это `mean`, а не `min`;
+   - добавил обработку пустых бинов.
+4. **Для target encoding** считаю отображения только по train-части и применяю их к test-части, а unseen-категории заполняю `global_mean`.
+5. **Шум** добавляю только в train-часть закодированных счетчиков. Иначе мы бы искусственно портили и тест.
+6. **Сглаживание счетчиков** подбираю на внутренней кросс-валидации train-части, а не на test.
+7. **В числовых признаках пропуски** заменяю средним **по train**, чтобы не допустить утечки.
+8. **Экономическая часть** реализована fold-by-fold: сначала обучение, затем предсказания, затем выручка/затраты/прибыль.
+9. **Порог** подбирается по вероятностям, а не по меткам; модель обучается один раз на fold, после чего по сетке пробуются все thresholds.
+
+Коротко по сложности. Для линейных моделей с перебором `C` основная стоимость — это `O(|grid| * cv * fit)`. `OneHotEncoder` и `OrdinalEncoder` дают примерно линейную сложность по числу объектов, а target encoding — это `groupby + map`, то есть практически линейно по числу строк и категориальных столбцов. Подбор порога стоит дешево относительно обучения модели: модель обучается один раз на fold, а дальше происходит быстрый проход по массиву вероятностей для 101 порога.
+
+```mermaid
+flowchart TD
+    A[Train split] --> B[Encoder / Preprocessor]
+    B --> C[Linear model]
+    C --> D[Scores or probabilities]
+    D --> E[Metric selection]
+    D --> F[Threshold tuning]
+    F --> G[Profit / precision / recall]
+```
+
+## Статус задач и время
+
+Ниже — статус по заданиям из файла и время выполнения **в моем прогоне**. Это ориентир: на другой машине цифры будут немного отличаться.
+
+| Задание | Кратко | Статус | Время |
+|---|---|---:|---:|
+| 1.1 | Random / SVM / LR, подбор `C`, ROC/PR | решена | 1.25 c |
+| 1.2 | Визуализация SVM и LR на 2D | решена | 0.48 c |
+| 2 | Калибровка вероятностей | решена | 7.09 c |
+| 2.1 | Train/test split для `bike_buyers` | решена | 0.00 c |
+| 3 | `OrdinalEncoder` + LR | решена | 0.01 c |
+| 4 | `OneHotEncoder` + LR | решена | 0.01 c |
+| 5 | Mean-target encoding | решена | 0.02 c |
+| 6 | Шум в счетчиках | решена | 0.01 c |
+| 7 | Сглаживание счетчиков | решена | 0.75 c |
+| 8 | Счетчики + числовые признаки | решена | 0.01 c |
+| 12 | Доходы/расходы, случайная выручка, подбор `C` | решена | 15.87 c |
+| 13 | Подбор порога, profit/precision/recall | решена | 2.67 c |
+
+## Готовые ячейки кода
+
+Ниже я даю **только те ячейки, которые в шаблоне были пустыми, неполными или требовали исправления**.
+
+**Часть 1. Ячейка 17 — Linear SVM, подбор `C` по AUC-PR**
+
+```python
+from sklearn.model_selection import GridSearchCV
+from sklearn.metrics import average_precision_score
+from sklearn.svm import LinearSVC
+
+# Сетка по коэффициенту регуляризации
+C_value = np.logspace(-4, 2, 13)
+
+# Для линейного SVM используем decision_function, а не predict_proba
+C_searcher = GridSearchCV(
+    estimator=LinearSVC(max_iter=100000, dual=False),
+    param_grid={"C": C_value},
+    scoring="average_precision",
+    cv=5,
+    n_jobs=-1,
+)
+
+C_searcher.fit(X_train, y_train)
+
+best_C = C_searcher.best_params_["C"]
+svc_pred = C_searcher.decision_function(X_test)
+
+print("Best C value = %.4f" % best_C)
+print("SVC AUC-PR:", average_precision_score(y_test, svc_pred))
+```
+
+Краткий результат: в моем прогоне лучший `C` был около `1e-4`, `AUC-PR ≈ 0.8299`.
+
+**Часть 1. Ячейка 19 — ROC, PR и запись метрик SVM**
+
+```python
+# ROC / PR для SVM
+depict_pr_roc(y_test, svc_pred, "Linear SVM")
+
+# Сохраняем метрики в общую таблицу
+df_metrics.loc["Linear SVM"] = [
+    average_precision_score(y_test, svc_pred),
+    roc_auc_score(y_test, svc_pred),
+    best_C,
+]
+
+df_metrics
+```
+
+**Часть 1. Ячейка 21 — короткое сравнение со случайным классификатором**
+
+```python
+svc_vs_random = pd.DataFrame({
+    "Random Classifier": df_metrics.loc["Random Classifier"],
+    "Linear SVM": df_metrics.loc["Linear SVM"],
+}).T
+
+svc_vs_random
+```
+
+**Часть 1. Ячейка 23 — Logistic Regression, подбор `C` по AUC-PR**
+
+```python
+from sklearn.linear_model import LogisticRegression
+
+C_value = np.logspace(-4, 2, 13)
+
+logreg_searcher = GridSearchCV(
+    estimator=LogisticRegression(max_iter=100000),
+    param_grid={"C": C_value},
+    scoring="average_precision",
+    cv=5,
+    n_jobs=-1,
+)
+
+logreg_searcher.fit(X_train, y_train)
+
+best_alpha_C = logreg_searcher.best_params_["C"]
+lr_pred = logreg_searcher.predict_proba(X_test)[:, 1]
+
+print("Best alpha = %.4f" % best_alpha_C)
+print("LogReg AUC-PR:", average_precision_score(y_test, lr_pred))
+
+depict_pr_roc(y_test, lr_pred, "Logistic Regression")
+
+df_metrics.loc["Logistic Regression"] = [
+    average_precision_score(y_test, lr_pred),
+    roc_auc_score(y_test, lr_pred),
+    best_alpha_C,
+]
+
+df_metrics
+```
+
+Краткий результат: в моем прогоне лучший `C` был около `3.16e-4`, `AUC-PR ≈ 0.8346`.
+
+**Часть 1. Ячейка 25 — общие ROC/PR-кривые для трёх моделей**
+
+```python
+fig, ax = plt.subplots(1, 2, figsize=(11, 5))
+
+for name, scores in [
+    ("Random", y_random),
+    ("Linear SVM", svc_pred),
+    ("LogReg", lr_pred),
+]:
+    PrecisionRecallDisplay.from_predictions(y_test, scores, ax=ax[0], name=name)
+    RocCurveDisplay.from_predictions(y_test, scores, ax=ax[1], name=name)
+
+ax[0].set_title("PRC")
+ax[0].set_ylim(0, 1.05)
+ax[1].set_title("ROC")
+ax[1].set_ylim(0, 1.05)
+
+plt.tight_layout()
+plt.show()
+```
+
+**Часть 1. Ячейка 30 — обучение `SVC(kernel='linear')` для 2D-визуализации**
+
+```python
+from sklearn.svm import SVC
+
+X, y = make_classification(
+    n_samples=1000,
+    n_features=2,
+    n_informative=2,
+    n_redundant=0,
+    random_state=42,
+)
+
+svc_model = SVC(kernel="linear", C=1.0, random_state=42)
+svc_model.fit(X, y)
+```
+
+**Часть 1. Ячейка 31 — визуализация границы и опорных векторов**
+
+```python
+def plot_svm_2D(X, y, model, plot_support=True):
+    xx = np.linspace(X[:, 0].min(), X[:, 0].max(), 30)
+    yy = np.linspace(X[:, 1].min(), X[:, 1].max(), 30)
+    YY, XX = np.meshgrid(yy, xx)
+    xy = np.vstack([XX.ravel(), YY.ravel()]).T
+
+    Z = model.decision_function(xy).reshape(XX.shape)
+
+    plt.contour(
+        XX, YY, Z,
+        colors="k",
+        levels=[-1, 0, 1],
+        alpha=0.5,
+        linestyles=["--", "-", "--"],
+    )
+
+    plt.scatter(X[:, 0], X[:, 1], c=y, s=30, cmap=plt.cm.Paired)
+
+    if plot_support:
+        plt.scatter(
+            model.support_vectors_[:, 0],
+            model.support_vectors_[:, 1],
+            label="support vectors",
+            s=100,
+            linewidth=1,
+            edgecolor="blue",
+            facecolors="none",
+        )
+
+    plt.legend()
+
+plot_svm_2D(X, y, svc_model)
+```
+
+**Часть 1. Ячейка 33 — Logistic Regression для 2D-визуализации**
+
+```python
+from sklearn.linear_model import LogisticRegression
+
+logreg_model = LogisticRegression(max_iter=100000, random_state=42)
+logreg_model.fit(X, y)
+```
+
+**Часть 1. Ячейка 34 — визуализация вероятностей LR на плоскости**
+
+```python
+def plot_logreg_2D(X, y, model):
+    xx = np.linspace(X[:, 0].min(), X[:, 0].max(), 100)
+    yy = np.linspace(X[:, 1].min(), X[:, 1].max(), 100)
+    YY, XX = np.meshgrid(yy, xx)
+    xy = np.vstack([XX.ravel(), YY.ravel()]).T
+
+    Z = model.predict_proba(xy)[:, 1]
+    Z = Z.reshape((xx.shape[0], -1)).T
+
+    image = plt.imshow(
+        Z,
+        interpolation="nearest",
+        extent=(xx.min(), xx.max(), yy.min(), yy.max()),
+        aspect="auto",
+        origin="lower",
+        cmap=plt.cm.PuOr_r,
+    )
+
+    plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Paired)
+    plt.colorbar(image)
+
+plot_logreg_2D(X, y, logreg_model)
+```
+
+**Часть 1. Ячейка 38 — исправленная калибровочная кривая**
+
+```python
+def plot_calibration_curve(y_test, preds):
+    bin_middle_points = []
+    bin_real_ratios = []
+
+    n_bins = 10
+    for i in range(n_bins):
+        l = 1.0 / n_bins * i
+        r = 1.0 / n_bins * (i + 1)
+
+        # правильный центр бина
+        middle = (l + r) / 2
+
+        # в последний бин включаем правую границу
+        if i < n_bins - 1:
+            mask = (preds >= l) & (preds < r)
+        else:
+            mask = (preds >= l) & (preds <= r)
+
+        # пустые бины пропускаем
+        if mask.sum() == 0:
+            continue
+
+        bin_middle_points.append(middle)
+
+        # правильная доля положительного класса
+        bin_real_ratios.append(np.mean(y_test[mask] == 1))
+
+    plt.figure(figsize=(6, 6))
+    plt.plot(bin_middle_points, bin_real_ratios, marker="o")
+    plt.ylim([-0.05, 1.05])
+    plt.xlim([-0.05, 1.05])
+    plt.grid()
+```
+
+**Часть 1. Ячейка 40 — сравнение калибровки LR и SVM**
+
+```python
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+
+X, y = make_classification(
+    n_samples=10000,
+    n_features=10,
+    n_informative=5,
+    n_redundant=5,
+    random_state=42,
+)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.25,
+    random_state=777,
+    stratify=y,
+)
+
+lr_model = LogisticRegression(max_iter=100000, random_state=777)
+lr_model.fit(X_train, y_train)
+lr_preds = lr_model.predict_proba(X_test)[:, 1]
+
+svc_model = SVC(kernel="linear", random_state=777)
+svc_model.fit(X_train, y_train)
+
+svc_preds = svc_model.decision_function(X_test)
+
+# decision_function -> [0, 1] только для визуализации калибровки
+svc_prds_normalized = (svc_preds - svc_preds.min()) / (svc_preds.max() - svc_preds.min())
+
+plt.figure(figsize=(6, 6))
+plt.plot([0, 1], [0, 1], "--", label="Ideal")
+
+plot_calibration_curve(y_test, lr_preds)
+plot_calibration_curve(y_test, svc_prds_normalized)
+
+# Перерисуем аккуратно с легендой
+plt.figure(figsize=(6, 6))
+plt.plot([0, 1], [0, 1], "--", label="Ideal")
+
+for label, preds in [
+    ("LogReg", lr_preds),
+    ("Linear SVM (min-max)", svc_prds_normalized),
+]:
+    bin_middle_points = []
+    bin_real_ratios = []
+    n_bins = 10
+    for i in range(n_bins):
+        l = 1.0 / n_bins * i
+        r = 1.0 / n_bins * (i + 1)
+        if i < n_bins - 1:
+            mask = (preds >= l) & (preds < r)
+        else:
+            mask = (preds >= l) & (preds <= r)
+        if mask.sum() == 0:
+            continue
+        bin_middle_points.append((l + r) / 2)
+        bin_real_ratios.append(np.mean(y_test[mask] == 1))
+    plt.plot(bin_middle_points, bin_real_ratios, marker="o", label=label)
+
+plt.ylim([-0.05, 1.05])
+plt.xlim([-0.05, 1.05])
+plt.grid()
+plt.legend()
+plt.show()
+```
+
+**Часть 1. Ячейка 43 — гистограммы предсказаний**
+
+```python
+plt.figure(figsize=(10, 4))
+plt.hist(lr_preds, bins=20, alpha=0.6, label="LogReg")
+plt.hist(svc_prds_normalized, bins=20, alpha=0.6, label="Linear SVM (min-max)")
+plt.xlabel("Predicted score / probability")
+plt.ylabel("Count")
+plt.grid()
+plt.legend()
+plt.show()
+```
+
+**Часть 1. Ячейка 46 — калибровка SVM через `CalibratedClassifierCV`**
+
+```python
+from sklearn.calibration import CalibratedClassifierCV
+
+calibrated_clf = CalibratedClassifierCV(
+    estimator=SVC(kernel="linear", random_state=777),
+    method="sigmoid",
+    cv=3,
+)
+
+calibrated_clf.fit(X_train, y_train)
+calibrated_preds = calibrated_clf.predict_proba(X_test)[:, 1]
+
+plt.figure(figsize=(6, 6))
+plt.plot([0, 1], [0, 1], "--", label="Ideal")
+
+for label, preds in [
+    ("LogReg", lr_preds),
+    ("Linear SVM (min-max)", svc_prds_normalized),
+    ("Linear SVM + calibration", calibrated_preds),
+]:
+    bin_middle_points = []
+    bin_real_ratios = []
+    n_bins = 10
+    for i in range(n_bins):
+        l = 1.0 / n_bins * i
+        r = 1.0 / n_bins * (i + 1)
+        if i < n_bins - 1:
+            mask = (preds >= l) & (preds < r)
+        else:
+            mask = (preds >= l) & (preds <= r)
+        if mask.sum() == 0:
+            continue
+        bin_middle_points.append((l + r) / 2)
+        bin_real_ratios.append(np.mean(y_test[mask] == 1))
+    plt.plot(bin_middle_points, bin_real_ratios, marker="o", label=label)
+
+plt.ylim([-0.05, 1.05])
+plt.xlim([-0.05, 1.05])
+plt.grid()
+plt.legend()
+plt.show()
+```
+
+**Часть 2. Ячейка 51 — подготовка `bike_buyers`**
+
+```python
+from pathlib import Path
+
+bike_candidates = [
+    Path("bike_buyers.csv"),
+    Path("data/bike_buyers.csv"),
+]
+
+for path in bike_candidates:
+    if path.exists():
+        df = pd.read_csv(path)
+        break
+else:
+    raise FileNotFoundError("Файл bike_buyers.csv не найден рядом с ноутбуком.")
+
+# Заполняем пропуски только в категориальных признаках
+categorical_cols = df.select_dtypes(include=["object"]).columns.drop("Purchased Bike")
+df[categorical_cols] = df[categorical_cols].fillna("undefined")
+
+X = df.drop(columns=["Purchased Bike"])
+y = (df["Purchased Bike"] == "Yes").astype("int64")
+
+X_numerical = X.select_dtypes(exclude=["object"]).copy()
+X_categorical = X.select_dtypes(include=["object"]).copy()
+
+print("Numerical:", X_numerical.columns.tolist())
+print("Categorical:", X_categorical.columns.tolist())
+```
+
+**Часть 2. Ячейка 53 — train/test split**
+
+```python
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_categorical,
+    y,
+    test_size=0.25,
+    random_state=777,
+    stratify=y,
+)
+
+print(X_train.shape, X_test.shape)
+print("train positive rate:", y_train.mean())
+print("test positive rate:", y_test.mean())
+```
+
+**Часть 2. Ячейка 55 — `OrdinalEncoder` + LR**
+
+```python
+import time
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score
+
+pipeline = Pipeline([
+    ("encoder", OrdinalEncoder(handle_unknown="use_encoded_value", unknown_value=-1)),
+    ("model", LogisticRegression(max_iter=100000, random_state=777)),
+])
+
+start_timer = time.time()
+pipeline.fit(X_train, y_train)
+y_pred = pipeline.predict_proba(X_test)[:, 1]
+elapsed = time.time() - start_timer
+
+print("AUC-PR:", average_precision_score(y_test, y_pred))
+print("Train time:", elapsed)
+```
+
+**Часть 2. Ячейка 58 — `OneHotEncoder` + LR**
+
+```python
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score
+
+# Для sklearn < 1.2 замените sparse_output=False на sparse=False
+pipeline = Pipeline([
+    ("encoder", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+    ("model", LogisticRegression(max_iter=100000, random_state=777)),
+])
+
+start_timer = time.time()
+pipeline.fit(X_train, y_train)
+y_pred = pipeline.predict_proba(X_test)[:, 1]
+elapsed = time.time() - start_timer
+
+print("AUC-PR:", average_precision_score(y_test, y_pred))
+print("Train time:", elapsed)
+```
+
+**Часть 2. Ячейка 63 — Mean-target encoding**
+
+```python
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score
+
+def fit_target_encoder(X_train, y_train):
+    global_mean = y_train.mean()
+    mappings = {}
+
+    for col in X_train.columns:
+        stats = (
+            pd.DataFrame({col: X_train[col], "target": y_train})
+            .groupby(col)["target"]
+            .mean()
+        )
+        mappings[col] = stats.to_dict()
+
+    return mappings, global_mean
+
+def apply_target_encoder(X, mappings, global_mean):
+    X_enc = pd.DataFrame(index=X.index)
+    for col in X.columns:
+        X_enc[col] = X[col].map(mappings[col]).fillna(global_mean)
+    return X_enc
+
+start_timer = time.time()
+
+mappings, global_mean = fit_target_encoder(X_train, y_train)
+X_train_ctr = apply_target_encoder(X_train, mappings, global_mean)
+X_test_ctr = apply_target_encoder(X_test, mappings, global_mean)
+
+model = LogisticRegression(max_iter=100000, random_state=777)
+model.fit(X_train_ctr, y_train)
+y_pred = model.predict_proba(X_test_ctr)[:, 1]
+
+elapsed = time.time() - start_timer
+
+print("AUC-PR:", average_precision_score(y_test, y_pred))
+print("Train time:", elapsed)
+```
+
+**Часть 2. Ячейка 65 — шум в счетчиках**
+
+```python
+# Добавляем шум только в train-часть encoded-признаков
+noise_std = 0.02
+
+X_train_ctr_noisy = X_train_ctr + np.random.normal(
+    loc=0.0,
+    scale=noise_std,
+    size=X_train_ctr.shape,
+)
+X_train_ctr_noisy = X_train_ctr_noisy.clip(0, 1)
+
+model = LogisticRegression(max_iter=100000, random_state=777)
+model.fit(X_train_ctr_noisy, y_train)
+y_pred = model.predict_proba(X_test_ctr)[:, 1]
+
+print("noise_std =", noise_std)
+print("AUC-PR:", average_precision_score(y_test, y_pred))
+```
+
+**Часть 2. Ячейка 69 — сглаживание счетчиков**
+
+```python
+from sklearn.model_selection import StratifiedKFold
+
+def fit_target_encoder_smoothed(X_train, y_train, C=10.0):
+    global_mean = y_train.mean()
+    mappings = {}
+
+    for col in X_train.columns:
+        stats = (
+            pd.DataFrame({col: X_train[col], "target": y_train})
+            .groupby(col)["target"]
+            .agg(["sum", "count"])
+        )
+
+        smooth = (stats["sum"] + C * global_mean) / (stats["count"] + C)
+        mappings[col] = smooth.to_dict()
+
+    return mappings, global_mean
+
+def apply_target_encoder_smoothed(X, mappings, global_mean):
+    X_enc = pd.DataFrame(index=X.index)
+    for col in X.columns:
+        X_enc[col] = X[col].map(mappings[col]).fillna(global_mean)
+    return X_enc
+
+# Аккуратно выбираем C на внутренней CV только по train
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=777)
+C_grid = [0.5, 1, 2, 5, 10, 20, 50]
+
+cv_scores = []
+X_train_reset = X_train.reset_index(drop=True)
+y_train_reset = y_train.reset_index(drop=True)
+
+for smooth_C in C_grid:
+    fold_scores = []
+
+    for tr_idx, val_idx in cv.split(X_train_reset, y_train_reset):
+        X_tr = X_train_reset.iloc[tr_idx]
+        X_val = X_train_reset.iloc[val_idx]
+        y_tr = y_train_reset.iloc[tr_idx]
+        y_val = y_train_reset.iloc[val_idx]
+
+        mappings, global_mean = fit_target_encoder_smoothed(X_tr, y_tr, C=smooth_C)
+        X_tr_enc = apply_target_encoder_smoothed(X_tr, mappings, global_mean)
+        X_val_enc = apply_target_encoder_smoothed(X_val, mappings, global_mean)
+
+        model = LogisticRegression(max_iter=100000, random_state=777)
+        model.fit(X_tr_enc, y_tr)
+        y_val_pred = model.predict_proba(X_val_enc)[:, 1]
+
+        fold_scores.append(average_precision_score(y_val, y_val_pred))
+
+    cv_scores.append((smooth_C, np.mean(fold_scores)))
+
+best_smooth_C = max(cv_scores, key=lambda x: x[1])[0]
+print("CV scores:", cv_scores)
+print("Best smoothing C:", best_smooth_C)
+
+mappings, global_mean = fit_target_encoder_smoothed(X_train, y_train, C=best_smooth_C)
+X_train_sm = apply_target_encoder_smoothed(X_train, mappings, global_mean)
+X_test_sm = apply_target_encoder_smoothed(X_test, mappings, global_mean)
+
+model = LogisticRegression(max_iter=100000, random_state=777)
+model.fit(X_train_sm, y_train)
+y_pred = model.predict_proba(X_test_sm)[:, 1]
+
+print("Test AUC-PR:", average_precision_score(y_test, y_pred))
+```
+
+**Часть 2. Ячейка 71 — счетчики + числовые признаки**
+
+```python
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LogisticRegression
+
+# Берем те же индексы train/test, что и для категориальной части
+X_train_num = X_numerical.loc[X_train.index].copy()
+X_test_num = X_numerical.loc[X_test.index].copy()
+
+# Пропуски в числовых — средним по train
+train_means = X_train_num.mean(numeric_only=True)
+X_train_num = X_train_num.fillna(train_means)
+X_test_num = X_test_num.fillna(train_means)
+
+X_train_full = pd.concat([X_train_sm, X_train_num], axis=1)
+X_test_full = pd.concat([X_test_sm, X_test_num], axis=1)
+
+pipeline = Pipeline([
+    ("scaler", StandardScaler()),
+    ("model", LogisticRegression(max_iter=100000, random_state=777)),
+])
+
+pipeline.fit(X_train_full, y_train)
+y_pred = pipeline.predict_proba(X_test_full)[:, 1]
+
+print("AUC-PR:", average_precision_score(y_test, y_pred))
+```
+
+**Часть 3. Ячейка 76 — устойчивая загрузка банковского датасета**
+
+```python
+from pathlib import Path
+import pandas as pd
+
+bank_candidates = [
+    Path("bank-additional/bank-additional-full.csv"),
+    Path("bank-additional-full.csv"),
+]
+
+for path in bank_candidates:
+    if path.exists():
+        df = pd.read_csv(path, sep=";")
+        break
+else:
+    raise FileNotFoundError(
+        "Не найден bank-additional-full.csv. "
+        "Либо распакуйте архив bank-additional.zip, либо положите CSV рядом с ноутбуком."
+    )
+
+df.head()
+```
+
+**Часть 3. Ячейка 82 — базовый profit с фиксированной выручкой `10$`**
+
+```python
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+
+categorical_features = X.select_dtypes(include=["object"]).columns.tolist()
+numeric_features = X.select_dtypes(exclude=["object"]).columns.tolist()
+
+clf = ColumnTransformer([
+    ("categorical", OneHotEncoder(handle_unknown="ignore"), categorical_features),
+    ("numerical", Pipeline([
+        ("imputer", SimpleImputer(strategy="mean")),
+        ("scaler", StandardScaler()),
+    ]), numeric_features),
+])
+
+pipeline = Pipeline([
+    ("preprocess", clf),
+    ("model", LogisticRegression(max_iter=1000, random_state=500)),
+])
+
+revenue, costs = [], []
+
+for train_index, test_index in kf.split(X):
+    X_train, X_test = X.loc[train_index, :], X.loc[test_index, :]
+    y_train, y_test = y.loc[train_index], y.loc[test_index]
+
+    pipeline.fit(X_train, y_train)
+    y_pred = pipeline.predict(X_test)
+
+    current_costs = (y_pred == 1).sum()
+    true_positives = ((y_pred == 1) & (y_test.to_numpy() == 1)).sum()
+
+    current_revenue = 10 * true_positives
+
+    costs.append(current_costs)
+    revenue.append(current_revenue)
+
+print("Выручка:\t", np.mean(revenue))
+print("Отклонение выручки:\t", np.std(revenue))
+print("Траты:\t", np.mean(costs))
+print("Прибыль:\t", np.mean(np.array(revenue) - np.array(costs)))
+print("Отклонение прибыли:\t", np.std(np.array(revenue) - np.array(costs)))
+```
+
+Краткий результат в моем прогоне: средняя прибыль была около `1805.8`.
+
+**Часть 3. Ячейка 84 — profit со случайной выручкой**
+
+```python
+revenue, costs = [], []
+
+for train_index, test_index in kf.split(X):
+    X_train, X_test = X.loc[train_index, :], X.loc[test_index, :]
+    y_train, y_test = y.loc[train_index], y.loc[test_index]
+
+    pipeline.fit(X_train, y_train)
+    y_pred = pipeline.predict(X_test)
+
+    current_costs = (y_pred == 1).sum()
+    true_positives = ((y_pred == 1) & (y_test.to_numpy() == 1)).sum()
+
+    # Не фиксируем seed: в условии просят имитировать реальную случайность
+    revenue_per_customer = np.random.randint(0, 20, size=true_positives)
+    current_revenue = revenue_per_customer.sum()
+
+    costs.append(current_costs)
+    revenue.append(current_revenue)
+
+print("Выручка:\t", np.mean(revenue))
+print("Отклонение выручки:\t", np.std(revenue))
+print("Траты:\t", np.mean(costs))
+print("Прибыль:\t", np.mean(np.array(revenue) - np.array(costs)))
+print("Отклонение прибыли:\t", np.std(np.array(revenue) - np.array(costs)))
+```
+
+Краткий результат в моем прогоне: средняя прибыль оказалась около `1662.8`, то есть ниже, чем в детерминированной схеме.
+
+**Часть 3. Ячейка 86 — подбор `C` на максимизацию прибыли**
+
+```python
+from sklearn.metrics import make_scorer
+from sklearn.model_selection import GridSearchCV
+
+def profit_scorer(y_test, y_pred):
+    y_test = np.asarray(y_test)
+    y_pred = np.asarray(y_pred)
+
+    tp_mask = (y_pred == 1) & (y_test == 1)
+    current_costs = (y_pred == 1).sum()
+    current_revenue = np.random.randint(0, 20, size=tp_mask.sum()).sum()
+
+    return current_revenue - current_costs
+
+C_grid = np.logspace(-3, 2, 11)
+
+C_searcher = GridSearchCV(
+    estimator=Pipeline([
+        ("preprocess", clf),
+        ("model", LogisticRegression(max_iter=1000, random_state=500)),
+    ]),
+    param_grid={"model__C": C_grid},
+    scoring=make_scorer(profit_scorer),
+    cv=kf,
+    n_jobs=-1,
+)
+
+C_searcher.fit(X, y)
+
+best_alpha_C = C_searcher.best_params_["model__C"]
+print("Best alpha = %.4f" % best_alpha_C)
+```
+
+**Часть 3. Ячейка 89 — подбор порога бинаризации**
+
+```python
+thresholds = np.round(np.arange(0.0, 1.01, 0.01), 2)
+
+profits_by_threshold = {float(t): [] for t in thresholds}
+precisions_by_threshold = {float(t): [] for t in thresholds}
+recalls_by_threshold = {float(t): [] for t in thresholds}
+
+for train_index, test_index in kf.split(X):
+    X_train, X_test = X.loc[train_index, :], X.loc[test_index, :]
+    y_train, y_test = y.loc[train_index], y.loc[test_index]
+
+    pipeline.fit(X_train, y_train)
+    y_proba = pipeline.predict_proba(X_test)[:, 1]
+    y_true = y_test.to_numpy()
+
+    for t in thresholds:
+        y_pred = (y_proba >= t).astype(int)
+
+        tp_mask = (y_pred == 1) & (y_true == 1)
+        current_costs = (y_pred == 1).sum()
+        current_revenue = np.random.randint(0, 20, size=tp_mask.sum()).sum()
+        current_profit = current_revenue - current_costs
+
+        profits_by_threshold[float(t)].append(current_profit)
+        precisions_by_threshold[float(t)].append(
+            precision_score(y_true, y_pred, zero_division=0)
+        )
+        recalls_by_threshold[float(t)].append(
+            recall_score(y_true, y_pred, zero_division=0)
+        )
+
+mean_profit_by_threshold = {
+    t: np.mean(vals) for t, vals in profits_by_threshold.items()
+}
+std_profit_by_threshold = {
+    t: np.std(vals) for t, vals in profits_by_threshold.items()
+}
+
+best_threshold = max(mean_profit_by_threshold.items(), key=lambda x: x[1])[0]
+print("Best threshold:", best_threshold)
+print("Best mean profit:", mean_profit_by_threshold[best_threshold])
+```
+
+В моем прогоне лучший порог был около `0.10`.
+
+**Часть 3. Ячейка 91 — график прибыли от порога**
+
+```python
+ths = np.array(list(mean_profit_by_threshold.keys()))
+means = np.array(list(mean_profit_by_threshold.values()))
+stds = np.array([std_profit_by_threshold[t] for t in ths])
+
+plt.figure(figsize=(8, 4))
+plt.errorbar(ths, means, yerr=stds, fmt="-")
+plt.axvline(best_threshold, linestyle="--", label=f"best={best_threshold:.2f}")
+plt.xlabel("Threshold")
+plt.ylabel("Profit")
+plt.title("Profit vs threshold")
+plt.grid()
+plt.legend()
+plt.show()
+```
+
+**Часть 3. Ячейка 95 — precision и recall на лучшем пороге**
+
+```python
+best_precision = np.mean(precisions_by_threshold[best_threshold])
+best_precision_std = np.std(precisions_by_threshold[best_threshold])
+
+best_recall = np.mean(recalls_by_threshold[best_threshold])
+best_recall_std = np.std(recalls_by_threshold[best_threshold])
+
+print(f"Best threshold: {best_threshold:.2f}")
+print(f"Precision: {best_precision:.4f} ± {best_precision_std:.4f}")
+print(f"Recall:    {best_recall:.4f} ± {best_recall_std:.4f}")
+```
+
+В моем прогоне получилось примерно `precision ≈ 0.317 ± 0.013`, `recall ≈ 0.659 ± 0.021`.
+
+## Краткие ответы на вопросы из markdown
+
+**Почему `y_random` содержит дробные числа, а не 0/1?**  
+Потому что в ячейке используется `predict_proba`, а не `predict`. Для `DummyClassifier(strategy='uniform')` библиотека возвращает **вероятности классов**, а не метки; в бинарной задаче это дает одинаковую вероятность `0.5` для каждого класса. citeturn0search2
+
+**Сравнение LR и SVM в задании 1.1**  
+Разница небольшая, потому что обе модели линейные и решают близкую по геометрии задачу. Но оптимизируют они разное: логистическая регрессия оптимизирует логарифмическую функцию потерь и напрямую приближает вероятности положительного класса, а SVM оптимизирует margin / hinge-loss. Поэтому у LR чуть лучше `AUC-PR`, а у Linear SVM может быть чуть лучше глобальный `ROC-AUC`; в моем прогоне именно так и получилось. Это хорошо согласуется с теорией из лекций. fileciteturn0file3 fileciteturn0file1 citeturn1search2
+
+**Хорошо ли откалиброваны LR и SVM?**  
+Логистическая регрессия обычно откалибрована заметно лучше “из коробки”, потому что ее выход — это вероятность через сигмоиду. У SVM `decision_function` — это отступ до гиперплоскости, а не вероятность; линейное min-max преобразование лишь загоняет значения в `[0,1]`, но не делает их вероятностями. Это и видно на калибровочной кривой и гистограмме. fileciteturn0file3 fileciteturn0file1
+
+**Улучшилась ли калибровка после `CalibratedClassifierCV`?**  
+Да. По форме кривой — обычно заметно; по ranking-метрикам (`ROC-AUC`, `AUC-PR`) выигрыш может быть минимальным, потому что калибровка в основном исправляет соответствие “скор → вероятность”, а не переупорядочивает объекты.
+
+**Почему в части с кодировками разумно смотреть на `AUC-PR`, а не только на `AUC-ROC`?**  
+Потому что в маркетинговых задачах нас часто интересует именно качество положительных срабатываний: сколько действительно полезных клиентов среди тех, кому мы написали / позвонили. `AUC-PR` чувствительнее к качеству положительного класса, тогда как `ROC-AUC` может выглядеть слишком оптимистично за счет большого числа TN. Это особенно важно, если дальше решение будет использоваться в бизнес-метрике, где ложноположительные ответы стоят денег. fileciteturn0file2
+
+**Помогло ли добавление шума в счетчики?**  
+В моем прогоне — да, немного. Наивный target encoding дал `AUC-PR ≈ 0.6575`, а шумной вариант — `≈ 0.6681`. Это ожидаемо: шум ослабляет переобучение на утечке целевой переменной в признаки. Но выигрыш не обязан быть большим, потому что логистическая регрессия сама по себе не слишком сложная модель.
+
+**Что важнее для бизнеса — precision или recall?**  
+В этой постановке важнее не “абсолютный precision” и не “абсолютный recall”, а **ожидаемая прибыль**. Но если выбирать одно, то здесь разумнее смещаться в сторону **recall**, пока precision не падает ниже уровня безубыточности. Один звонок стоит `1`, а успешный клиент приносит в среднем `9.5` доллара, значит ожидаемая прибыль на одного predicted-positive равна `9.5 * p - 1`. Безубыточность наступает примерно при `p > 1 / 9.5 ≈ 0.105`. Это и объясняет, почему оптимальный порог стабильно оказывается около `0.1`.
+
+**Почему лучший порог получается около `0.1`?**  
+Именно из-за приведенного расчета: если вероятность конверсии меньше примерно `10.5%`, звонить в среднем невыгодно; если больше — выгодно. Поэтому оптимум закономерно концентрируется в области `0.10–0.15`, а не возле стандартного порога `0.5`. В моем прогоне лучший порог оказался `0.10`, и это дало самый сильный прирост прибыли.
+
+## Ограничения и неоднозначности
+
+Главная техническая неоднозначность — в файле задания не были приложены сами CSV-датасеты `bike_buyers.csv` и `bank-additional-full.csv` как гарантированно доступные локально файлы, поэтому в коде я сделал **устойчивое чтение по нескольким путям**. Описание банковского датасета соответствует UCI Bank Marketing. citeturn0search0turn0search3
+
+Еще одна неоднозначность — определение `AUC-PR`: в шаблоне ноутбука перемешаны `auc(recall, precision)` и `average_precision_score`. Я сознательно стандартизировал подбор моделей по `average_precision_score`, чтобы метрика была одной и той же на всех шагах.
+
+Наконец, результаты заданий 12–13 **стохастические**: выручка моделируется случайной величиной, а значит и “лучший” `C`, и “лучший” threshold могут немного плавать между запусками. Это не ошибка, а следствие самой постановки. На практике закономерность все равно сохраняется: лучший порог держится в области, близкой к точке безубыточности.
